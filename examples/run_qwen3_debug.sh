@@ -7,7 +7,7 @@ export RAY_DEBUG_POST_MORTEM=1
 ulimit -n 65535
 
 PROJECT_DIR="$(pwd)"
-CONFIG_PATH="$PROJECT_DIR/beyondagent/config"
+CONFIG_PATH="$PROJECT_DIR/config"
 # completion_callback=none
 env_url=http://localhost:8000
 current_time=$(date "+%Y%m%d_%H%M%S")
@@ -16,7 +16,7 @@ log_file="dlc_log_${current_time}.log"
 python3 -m beyondagent.main_ppo \
     --config-path="$CONFIG_PATH" \
     --config-name='beyond_agent_dataflow' \
-    beyond_agent.env_url=$env_url \
+    env_service.env_url=$env_url \
     algorithm.adv_estimator=grpo \
     data.train_batch_size=16 \
     data.max_prompt_length=4096 \

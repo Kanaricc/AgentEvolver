@@ -13,14 +13,14 @@ class AgentFlow(BaseAgentFlow):
         super().__init__(**kwargs)
         self.instruction_template_ids = self.tokenizer.encode("<|im_start|>user\n")
         self.response_template_ids = self.tokenizer.encode("<|im_start|>assistant\n")
-        self.em_client = EMClient(base_url=self.config.experiencemaker.base_url)
+        self.em_client = EMClient(base_url=self.config.experience_maker.base_url)
 
     def execute(self, trajectory: Trajectory, env: EnvClient, instance_id: str, **kwargs) -> Trajectory:
-        if self.config.experiencemaker.enable_context_generator:  # add by jinli 0618
+        if self.config.experience_maker.enable_context_generator:  # add by jinli 0618
             history_experience = self.em_client.call_context_generator(
                 trajectory=trajectory,
-                retrieve_top_k=self.config.experiencemaker.retrieve_top_k,
-                workspace_id=self.config.experiencemaker.workspace_id)
+                retrieve_top_k=self.config.experience_maker.retrieve_top_k,
+                workspace_id=self.config.experience_maker.workspace_id)
 
             if history_experience:
                 logger.info(f"history_experience={history_experience}")

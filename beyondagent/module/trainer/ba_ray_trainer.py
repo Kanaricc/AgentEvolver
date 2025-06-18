@@ -104,7 +104,7 @@ class BeyondAgentRayPPOTrainer(RayPPOTrainer):
         self.reward_fn = parse_reward_from_dataproto
         self.val_reward_fn = parse_reward_from_dataproto
 
-        self.em_client = EMClient(base_url=self.config.experiencemaker.base_url)
+        self.em_client = EMClient(base_url=self.config.experience_maker.base_url)
         self.env_manager = ParallelEnvManager(config=self.config, async_rollout_manager=self.async_rollout_manager, max_parallel=self.config.actor_rollout_ref.rollout.max_env_worker)
         self.thread_pool = ThreadPoolExecutor(max_workers=self.config.thread_pool.max_workers)
 
@@ -166,7 +166,7 @@ class BeyondAgentRayPPOTrainer(RayPPOTrainer):
                 tasks = [Task(
                             task_id=test_gen_batch_padded.non_tensor_batch["extras"][i]["task_id"], 
                             query=test_gen_batch_padded.non_tensor_batch["raw_prompt"][i],
-                    env_type=self.config.env_service.env_type
+                            env_type=self.config.env_service.env_type
                          ) for i in range(len(test_gen_batch_padded))]
                 trajectories = self.env_manager.rollout(tasks, mode="validate")
                 test_output_gen_batch_padded = self.env_manager.to_dataproto(trajectories)
@@ -312,7 +312,7 @@ class BeyondAgentRayPPOTrainer(RayPPOTrainer):
                             tasks = [Task(
                                         task_id=gen_batch.non_tensor_batch["extras"][i]["task_id"], 
                                         query=gen_batch.non_tensor_batch["raw_prompt"][i],
-                                env_type=self.config.env_service.env_type
+                                        env_type=self.config.env_service.env_type
                                     ) for i in range(len(gen_batch))]
                             trajectories = self.env_manager.rollout(tasks, mode="sample")
                             gen_batch_output = self.env_manager.to_dataproto(trajectories)

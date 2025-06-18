@@ -16,7 +16,6 @@ class BaseAgentFlow(object):
                  max_steps: int = 10,
                  max_model_len: int = 20480,
                  max_env_len: int = 1024,
-                 config: DictConfig = None,
                  **kwargs):
         # super.__init__(**kwargs)
         self.llm_chat_fn: Callable = llm_chat_fn
@@ -25,7 +24,6 @@ class BaseAgentFlow(object):
         self.max_steps: int = max_steps
         self.max_model_len: int = max_model_len
         self.max_env_len: int = max_env_len
-        self.config: DictConfig = config
 
     def execute(self, trajectory: Trajectory, env: EnvClient, instance_id: str, **kwargs) -> Trajectory:
         raise NotImplementedError
