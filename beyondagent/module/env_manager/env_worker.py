@@ -1,15 +1,16 @@
 import uuid
 
+from omegaconf import DictConfig
+
 from beyondagent.client.env_client import EnvClient
 from beyondagent.module.agent_flow.base_agent_flow import BaseAgentFlow
 from beyondagent.schema.trajectory import Trajectory
-from omegaconf import DictConfig
+
 
 class EnvWorker(object):
 
-    def __init__(self, env_type: str, task_id: str, instance_id: str = None, thread_index: int = None, config: DictConfig = None,
-                 **kwargs):
-        # super.__init__(**kwargs)
+    def __init__(self, env_type: str, task_id: str, instance_id: str = None, thread_index: int = None,
+                 config: DictConfig = None):
         self.env = EnvClient(base_url=config.beyond_agent.env_url)
         self.env_type: str = env_type
         self.task_id: str = task_id

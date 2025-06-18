@@ -1,24 +1,23 @@
-from concurrent.futures import ThreadPoolExecutor
-from typing import Any, Dict
-from typing import List
-from typing import Literal
 import copy
-from omegaconf import DictConfig
-from verl import DataProto
-from verl.workers.rollout.async_server import AsyncLLMServerManager
-from verl.utils.model import compute_position_id_with_mask
-from verl.utils.torch_functional import (get_response_mask,
-                                         pad_sequence_to_length)
-import torch
+from concurrent.futures import ThreadPoolExecutor
+from typing import Any, Dict, List, Literal
+
 import numpy as np
+import torch
+from loguru import logger
+from omegaconf import DictConfig
 from tensordict import TensorDict
 from torch.nn.utils.rnn import pad_sequence
+from verl import DataProto
+from verl.utils.model import compute_position_id_with_mask
+from verl.utils.torch_functional import (pad_sequence_to_length)
+from verl.workers.rollout.async_server import AsyncLLMServerManager
 
-from beyondagent.module.env_manager.env_worker import EnvWorker
-from beyondagent.module.agent_flow.base_agent_flow import BaseAgentFlow
 from beyondagent.module.agent_flow.agent_flow import AgentFlow
-from beyondagent.schema.trajectory import Trajectory, Sample
+from beyondagent.module.agent_flow.base_agent_flow import BaseAgentFlow
+from beyondagent.module.env_manager.env_worker import EnvWorker
 from beyondagent.schema.task import Task
+from beyondagent.schema.trajectory import Trajectory, Sample
 
 
 class ParallelEnvManager(object):
@@ -85,7 +84,7 @@ class ParallelEnvManager(object):
 
         return trajectory
 
-    def rollout(self, tasks: List[Task], mode: Literal["sample", "validate"], **kwargs) -> List[Trajectory]:
+    def rollout(self, tasks: List[Task], mode: Literal["sample", "validate"]) -> List[Trajectory]:
         trajectory_list: List[Trajectory] = []
         rollout_n = 1 if mode=="validate" else self.rollout_n
         with ThreadPoolExecutor(max_workers=self.max_parallel) as executor:
@@ -152,7 +151,8 @@ class ParallelEnvManager(object):
             self.response_template_ids = self.tokenizer.encode("<|im_start|>assistant\n")
 
             for assistant_idx in np.where(response_ids_np == self.response_template_ids[0])[0]:
-                if (self.response_template_ids == response_ids_np[assistant_idx: assistant_idx + len(self.response_template_ids)].tolist()):
+                if self.response_template_ids == response_ids_np[assistant_idx: assistant_idx + len(
+                        self.response_template_ids)].tolist():
                     response_token_ids_idxs.append(assistant_idx + len(self.response_template_ids))
 
             for human_idx in np.where(response_ids_np == self.instruction_template_ids[0])[0]:

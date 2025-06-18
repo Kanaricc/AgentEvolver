@@ -8,16 +8,15 @@ from beyondagent.schema.trajectory import Trajectory
 
 class AgentFlow(BaseAgentFlow):
 
-    def __init__(self, enable_experience: bool = False, **kwargs):
+    def __init__(self, enable_historical_experience: bool = False, **kwargs):
         super().__init__(**kwargs)
-        self.enable_experience: bool = enable_experience
+        self.enable_historical_experience: bool = enable_historical_experience
         self.instruction_template_ids = self.tokenizer.encode("<|im_start|>user\n")
         self.response_template_ids = self.tokenizer.encode("<|im_start|>assistant\n")
         self.em_client = EMClient()
 
-    def execute(self, trajectory: Trajectory, env: EnvClient, instance_id: str, **kwargs) -> Trajectory:
-        # add by jinli.yl
-        if self.enable_experience:
+    def add_historical_experience(self, trajectory: Trajectory):
+        if self.enable_historical_experience:
             history_experience = self.em_client.call_context_generator(trajectory=trajectory,
                                                                        retrieve_top_k=1,
                                                                        workspace_id="default")
@@ -25,8 +24,13 @@ class AgentFlow(BaseAgentFlow):
                 logger.info(f"history_experience={history_experience}")
                 trajectory.steps[-1]["content"] = history_experience + "\n\n" + trajectory.steps[-1]["content"]
 
+    def execute(self, trajectory: Trajectory, env: EnvClient, instance_id: str, **kwargs) -> Trajectory:
+        if self.enable_historical_experience:  # add by jinli 0618
+            self.add_historical_experience(trajectory)
+
         for act_step in range(self.max_steps):
-            prompt_text = self.tokenizer.apply_chat_template(trajectory.steps, tokenize=False,
+            prompt_text = self.tokenizer.apply_chat_template(trajectory.steps,
+                                                             tokenize=False,
                                                              add_generation_prompt=True)
             current_token_len = len(self.tokenizer(prompt_text, return_tensors="pt", padding=False)["input_ids"][0])
 

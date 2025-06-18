@@ -41,7 +41,10 @@ from verl.trainer.ppo.ray_trainer import (AdvantageEstimator, RayPPOTrainer,
 from verl.trainer.ppo.reward import compute_reward, compute_reward_async
 from verl.utils.metric import reduce_metrics
 
+from beyondagent.client.em_client import EMClient
+from beyondagent.module.env_manager.env_manager import ParallelEnvManager
 from beyondagent.schema.task import Task
+
 
 def parse_reward_from_dataproto(data: DataProto, return_dict=False) -> dict | torch.Tensor:
     """
@@ -89,15 +92,15 @@ class BeyondAgentRayPPOTrainer(RayPPOTrainer):
     """
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        # TODO at jinli
         # self.remote_batch_experience_summarize = ray.remote(batch_experience_summarize)
+        self.em_client = EMClient()
+        self.env_manager: ParallelEnvManager | None = None
 
     def init_workers(self):
         super().init_workers()
         self.reward_fn = parse_reward_from_dataproto
         self.val_reward_fn = parse_reward_from_dataproto
-        from ..env_manager.env_manager import ParallelEnvManager
-        self.explorer_manager = ParallelEnvManager(
+        self.env_manager = ParallelEnvManager(
             config=self.config, 
             async_rollout_manager=self.async_rollout_manager
         )
@@ -162,8 +165,8 @@ class BeyondAgentRayPPOTrainer(RayPPOTrainer):
                             query=test_gen_batch_padded.non_tensor_batch["raw_prompt"][i],
                             env_type=self.config.beyond_agent.env_type
                          ) for i in range(len(test_gen_batch_padded))]
-                trajectories = self.explorer_manager.rollout(tasks, mode="validate")
-                test_output_gen_batch_padded = self.explorer_manager.to_dataproto(trajectories)
+                trajectories = self.env_manager.rollout(tasks, mode="validate")
+                test_output_gen_batch_padded = self.env_manager.to_dataproto(trajectories)
                 # test_output_gen_batch_padded = self.explorer_manager.rollout(test_gen_batch_padded)
                 # test_output_gen_batch_padded = self.async_rollout_manager.generate_sequences(test_gen_batch_padded)
                 self.async_rollout_manager.sleep()
@@ -307,8 +310,8 @@ class BeyondAgentRayPPOTrainer(RayPPOTrainer):
                                         query=gen_batch.non_tensor_batch["raw_prompt"][i],
                                         env_type=self.config.beyond_agent.env_type
                                     ) for i in range(len(gen_batch))]
-                            trajectories = self.explorer_manager.rollout(tasks, mode="sample")
-                            gen_batch_output = self.explorer_manager.to_dataproto(trajectories)
+                            trajectories = self.env_manager.rollout(tasks, mode="sample")
+                            gen_batch_output = self.env_manager.to_dataproto(trajectories)
 
                             # gen_batch_output = self.async_rollout_manager.generate_sequences(gen_batch)
                             self.async_rollout_manager.sleep()
@@ -337,10 +340,9 @@ class BeyondAgentRayPPOTrainer(RayPPOTrainer):
                     batch.batch["response_mask"] = compute_response_mask(batch)
                     
                     # summary for experience of beyond_agent, updating candidate context
-                    # if self.config.beyond_agent.enable_summary:
-                    #     with _timer("beyondagent_summary", timing_raw):
-                    #         # future_summary = self.remote_batch_experience_summarize = ray.remote(batch_experience_summarize, self.config)
-                    #         future_summary = self.remote_batch_experience_summarize.remote(batch, self.config)
+                    if self.config.beyond_agent.enable_summary:
+                        with _timer("beyondagent_summary", timing_raw):
+                            self.em_client.call_summarizer(trajectories=trajectories, workspace_id="default")
 
                     # balance the number of valid tokens on each dp rank.
                     # Note that this breaks the order of data inside the batch.

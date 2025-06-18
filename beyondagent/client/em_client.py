@@ -1,15 +1,16 @@
+import asyncio
 from typing import List
 
 from pydantic import Field
 
-from beyondagent.schema.trajectory import Trajectory
+from beyondagent.schema.trajectory import Trajectory, Reward
 from beyondagent.utils.http_client import HttpClient
 
 
 class EMClient(HttpClient):
     base_url: str = Field(default="http://localhost:8001")
 
-    def call_context_generator(self, trajectory: Trajectory, retrieve_top_k: int = 1, workspace_id: str = "",
+    def call_context_generator(self, trajectory: Trajectory, retrieve_top_k: int = 1, workspace_id: str = "default",
                                **kwargs) -> str:
         self.url = self.base_url + "/context_generator"
         json_data = {
@@ -23,7 +24,15 @@ class EMClient(HttpClient):
         # TODO return raw experience instead of context @jinli
         return response["context_msg"]["content"]
 
-    def call_summarizer(self, trajectories: List[Trajectory], workspace_id: str = "", **kwargs):
+    async def async_call_context_generator(self, executor=None, **kwargs):
+        loop = asyncio.get_event_loop()
+
+        def func():
+            return self.call_context_generator(**kwargs)
+
+        return await loop.run_in_executor(executor=executor, func=func)
+
+    def call_summarizer(self, trajectories: List[Trajectory], workspace_id: str = "default", **kwargs):
         self.url = self.base_url + "/summarizer"
         json_data = {
             "trajectories": [x.model_dump() for x in trajectories],
@@ -33,8 +42,16 @@ class EMClient(HttpClient):
         response = self.request(json_data=json_data, headers={"Content-Type": "application/json"})
         return response["experiences"]
 
+    async def async_call_summarizer(self, executor=None, **kwargs):
+        loop = asyncio.get_event_loop()
 
-if __name__ == "__main__":
+        def func():
+            return self.call_summarizer(**kwargs)
+
+        return await loop.run_in_executor(executor=executor, func=func)
+
+
+def main():
     client = EMClient()
     traj = Trajectory(
         steps=[
@@ -47,8 +64,13 @@ if __name__ == "__main__":
                 "content": "Paris"
             }
         ],
-        query="What is the capital of France?"
+        query="What is the capital of France?",
+        reward=Reward(outcome=1.0)
     )
     workspace_id = "w_agent_enhanced"
-    print(client.call_context_generator(traj, retrieve_top_k=3, workspace_id=workspace_id))
+
     print(client.call_summarizer(trajectories=[traj], workspace_id=workspace_id))
+    print(client.call_context_generator(traj, retrieve_top_k=3, workspace_id=workspace_id))
+
+if __name__ == "__main__":
+    main()

@@ -1,4 +1,4 @@
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, Dict, List
 
 from pydantic import BaseModel, Field
 
@@ -9,12 +9,16 @@ class Reward(BaseModel):
 
     metadata: dict = Field(default_factory=dict)
 
+    @property
+    def success(self) -> bool:
+        return self.outcome > 0
+
 
 class Trajectory(BaseModel):
     data_id: str = Field(default="")
     rollout_id: str = Field(default="")
 
-    steps: List[Dict[str, str]] = Field(default_factory=list)
+    steps: List[dict] = Field(default_factory=list)
     query: str = Field(default="")
 
     is_terminated: bool = Field(default=False)
@@ -22,13 +26,17 @@ class Trajectory(BaseModel):
 
     metadata: dict = Field(default_factory=dict)
 
+    @property
+    def success(self) -> bool:
+        return self.reward.outcome > 0
+
 
 class Sample(BaseModel):
     """The data model for single sample."""
 
-    data_id: int = 0
-    rollout_id: int = 0
-    messages: List[Dict[str, Any]] = []
+    data_id: str = 0
+    rollout_id: str = 0
+    messages: List[dict] = []
     extras: Dict[str, Any] = {}
     input_ids: List[int] = None
     prompt_ids: List[int] = None

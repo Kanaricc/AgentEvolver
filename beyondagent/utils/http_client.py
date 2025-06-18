@@ -13,14 +13,14 @@ class HttpClient(BaseModel):
     url: str = Field(default="")
     keep_alive: bool = Field(default=False, description="if true, use session to keep long connection")
     timeout: int = Field(default=300, description="request timeout, second")
-
     return_default_if_error: bool = Field(default=True)
+
     request_start_time: float = Field(default_factory=time.time)
     request_time_cost: float = Field(default=0.0, description="request time cost")
 
-    retry_sleep_time: float = Field(0.5, description="interval time for retry")
-    retry_time_multiplier: float = Field(2.0, description="retry time multiplier")
-    retry_max_count: int = Field(1, description="maximum number of retries")
+    retry_sleep_time: float = Field(default=0.5, description="interval time for retry")
+    retry_time_multiplier: float = Field(default=2.0, description="retry time multiplier")
+    retry_max_count: int = Field(default=1, description="maximum number of retries")
 
     _client: Any = PrivateAttr()
 

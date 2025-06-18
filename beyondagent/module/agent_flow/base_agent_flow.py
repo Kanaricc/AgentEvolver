@@ -20,5 +20,5 @@ class BaseAgentFlow(object):
         self.max_model_len: int = max_model_len
         self.max_env_len: int = max_env_len
 
-    def execute(self, trajectory: Trajectory, env: EnvClient, **kwargs) -> Trajectory:
+    def execute(self, trajectory: Trajectory, env: EnvClient, instance_id: str, **kwargs) -> Trajectory:
         raise NotImplementedError
