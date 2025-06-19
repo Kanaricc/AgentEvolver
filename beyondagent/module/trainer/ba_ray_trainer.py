@@ -314,6 +314,8 @@ class BeyondAgentRayPPOTrainer(RayPPOTrainer):
                                         query=gen_batch.non_tensor_batch["raw_prompt"][i],
                                         env_type=self.config.env_service.env_type
                                     ) for i in range(len(gen_batch))]
+
+                            # TODO enable tracing by jinli 0619
                             trajectories = self.env_manager.rollout(tasks, mode="sample")
                             gen_batch_output = self.env_manager.to_dataproto(trajectories)
                             # breakpoint()
