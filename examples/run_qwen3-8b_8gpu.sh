@@ -25,7 +25,7 @@ python3 -m beyondagent.main_ppo \
     data.truncation='error' \
     data.return_raw_chat=True \
     actor_rollout_ref.rollout.prompt_length=20480 \
-    actor_rollout_ref.rollout.response_length=2048 \
+    actor_rollout_ref.rollout.response_length=4096 \
     actor_rollout_ref.rollout.max_model_len=20480 \
     actor_rollout_ref.rollout.temperature=0.9 \
     actor_rollout_ref.model.path=/mnt/data_cpfs/xielipeng.xlp/models/Qwen3-8B \

@@ -77,7 +77,9 @@ class ParallelEnvManager(object):
             sampling_params["top_p"] = self.rollout_config.val_kwargs.top_p
 
         llm_chat_fn = self.get_llm_chat_fn(sampling_params)
-        agent_flow: BaseAgentFlow = AgentFlow(llm_chat_fn=llm_chat_fn, tokenizer=self.tokenizer, config=self.config,
+        agent_flow: BaseAgentFlow = AgentFlow(llm_chat_fn=llm_chat_fn, 
+                                              tokenizer=self.tokenizer, 
+                                              config=self.config,
                                               **kwargs)
 
         # FIXME pass env_type & task_id

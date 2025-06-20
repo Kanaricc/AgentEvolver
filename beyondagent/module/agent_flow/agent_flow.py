@@ -43,7 +43,7 @@ class AgentFlow(BaseAgentFlow):
                 break
 
             # callback llm server, messages.size=1
-            llm_output = self.llm_chat_fn(trajectory.steps)
+            llm_output = self.llm_chat_fn(trajectory.steps, custom_sampling_params={"max_tokens": self.max_model_len-current_token_len})
             assert len(llm_output) == 1
             trajectory.steps.extend(llm_output)
 
@@ -51,6 +51,7 @@ class AgentFlow(BaseAgentFlow):
             # convert role_tool to role_user message
             # breakpoint()
             
+            # useless: for tool role
             if env_output["state"]["role"] == "tool":
                 env_output["state"] = convert_tool_to_user_message(env_output["state"], self.tokenizer, format="qwen")
             

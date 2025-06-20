@@ -21,11 +21,13 @@ actor_rollout_ref:
     multi_turn:
       enabled: True
       format: llama3_json
+      max_steps: 30
     custom_dataflow_cls:
       path: ""
       name: ""
     use_qwen3: True
     max_env_worker: 64
+    max_env_len: 4096
 
 thread_pool:
   max_workers: 5

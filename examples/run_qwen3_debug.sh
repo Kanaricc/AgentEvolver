@@ -28,7 +28,7 @@ python3 -m beyondagent.main_ppo \
     actor_rollout_ref.rollout.response_length=2048 \
     actor_rollout_ref.rollout.max_model_len=20480 \
     actor_rollout_ref.rollout.temperature=0.9 \
-    actor_rollout_ref.model.path=/mnt/data_cpfs/xielipeng.xlp/models/Qwen3-4B \
+    actor_rollout_ref.model.path=/mnt/data_cpfs/xielipeng.xlp/models/Qwen3-8B \
     actor_rollout_ref.actor.optim.lr=1e-6 \
     actor_rollout_ref.model.use_remove_padding=True \
     actor_rollout_ref.actor.ppo_mini_batch_size=16 \
@@ -51,14 +51,14 @@ python3 -m beyondagent.main_ppo \
     algorithm.use_kl_in_reward=False \
     trainer.n_gpus_per_node=2 \
     trainer.critic_warmup=0 \
-    trainer.logger=['console'] \
+    trainer.logger=['console','wandb'] \
     trainer.project_name='beyondagent' \
     trainer.experiment_name='qwen3-8b_appworld_zyp' \
     trainer.nnodes=1 \
     trainer.save_freq=-1 \
     trainer.test_freq=20 \
     trainer.total_epochs=15 \
-    trainer.val_before_train=False \
+    trainer.val_before_train=True \
     trainer.validation_data_dir="experiments/validation_log" \
     actor_rollout_ref.actor.ppo_max_token_len_per_gpu=20480 \
     actor_rollout_ref.rollout.log_prob_max_token_len_per_gpu=20480 \
