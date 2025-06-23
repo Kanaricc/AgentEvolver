@@ -10,6 +10,7 @@ from beyondagent.utils.http_client import HttpClient
 
 class EMClient(HttpClient):
     base_url: str = Field(default="http://localhost:8001")
+    timeout: int = Field(default=1200 , description="request timeout, second")
 
     def call_context_generator(self, trajectory: Trajectory, retrieve_top_k: int = 1, workspace_id: str = "default",
                                **kwargs) -> str:
