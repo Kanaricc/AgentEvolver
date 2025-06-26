@@ -59,7 +59,7 @@ python3 -m beyondagent.main_ppo \
     trainer.nnodes=1 \
     trainer.save_freq=-1 \
     trainer.test_freq=20 \
-    trainer.total_epochs=1 \
+    trainer.total_epochs=20 \
     trainer.val_before_train=True \
     trainer.validation_data_dir="experiments/exp_${current_time}/validation_log" \
     trainer.rollout_data_dir="experiments/exp_${current_time}/rollout_log" \
