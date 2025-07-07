@@ -2,10 +2,11 @@
 
 from concurrent.futures import ThreadPoolExecutor
 import copy
+import functools
 import json
 import os
 import time
-from typing import Callable, Iterable, Optional, Sequence, TypedDict, Unpack
+from typing import Callable, Iterable, NotRequired, Optional, Sequence, TypedDict, Unpack
 
 import hydra
 from loguru import logger
@@ -16,6 +17,7 @@ from beyondagent.module.agent_flow.agent_flow import AgentFlow
 from beyondagent.module.agent_flow.base_agent_flow import BaseAgentFlow
 from beyondagent.module.task_manager.adapter import OnflyRlDataset, to_rl_dataset
 from beyondagent.module.task_manager.env_worker import EnvWorker
+from beyondagent.module.task_manager.filters import TaskPostFilter
 from beyondagent.module.task_manager.prompt_explore import AGENT_INTERACTION_SYSTEM_PROMPT
 from beyondagent.module.task_manager.prompt_summarize import get_task_summarize_prompt, parse_tasks_from_response
 from beyondagent.module.task_manager.protocols import LlmClient
@@ -28,6 +30,15 @@ class TaskManagerProps(TypedDict):
     max_explore_step:int
     num_explore_threads:int
     n:int
+    exploration_llm_temperature:NotRequired[float]
+    exploration_llm_top_p:NotRequired[float]
+    exploration_llm_top_k:NotRequired[int]
+
+# TODO: 筛选
+# TODO: LlmClient 需要适配 policy model
+# TODO: 针对不同环境的统一接口，message-in message-out？那可能不需要这个
+# TODO: 能够替换的 exploration & extraction (summary) strategy
+# TODO: 多线程
 
 class TaskManager(object):
 
@@ -35,12 +46,19 @@ class TaskManager(object):
         self._config=config
         self._llm_client = llm_client
         self._env_service_url = env_service_url
+        self._tokenizer = tokenizer # TODO: 这玩意似乎不该在这
         self._max_llm_retries = kwargs["max_llm_retries"] or 3
         self._max_explore_step = kwargs["max_explore_step"] or 20
         self._num_exploration_threads = kwargs["num_explore_threads"] or 10
+        self._exploration_llm_temperature = kwargs.get("exploration_llm_temperature", 1.0)
+        self._exploration_llm_top_p = kwargs.get("exploration_llm_top_p", 1.0)
+        self._exploration_llm_top_k = kwargs.get("exploration_llm_top_k", 1)
         self._n=kwargs["n"]
         
-        self._tokenizer = tokenizer # TODO: 这玩意似乎不该在这
+        self._filters:list[TaskPostFilter]=[]
+    
+    def register_filter(self,filter:TaskPostFilter):
+        self._filters.append(filter)
     
     def generate_task(self,tasks:Sequence[Task])->list[TaskObjective]:
         task_q=list(copy.copy(tasks))*self._n
@@ -48,10 +66,13 @@ class TaskManager(object):
         # 每次最多探索所有不同任务，或者最大线程个任务
         parallel_num=min(self._num_exploration_threads,len(tasks))
         for i in range(0,len(task_q),parallel_num):
+            # TODO: 把已经有的 task 加入 experience，阻止再次探索重复任务
             trajectories=self._step_explore_batch(task_q[i:i+parallel_num])
             task_objectives=self._step_summarize_batch(task_q[i:i+parallel_num],trajectories)
             res.extend(task_objectives)
-            # TODO: 把已经有的 task 加入 experience，阻止再次探索重复任务
+        
+        # post filter
+        res=functools.reduce(lambda x,f:f.filter(x),self._filters,res)
         
         return res
     
@@ -81,8 +102,7 @@ class TaskManager(object):
                         break
                 
                 ls=fa.generate_task(delta)
-                # TODO: 应当以 task 数量判断，还是 task*n？
-                while len(ls)<self._bs:
+                while len(ls)<self._bs*fa._n:
                     logger.debug("failed to generate enough tasks, retrying")
                     ls=fa.generate_task(delta)
                 
@@ -117,7 +137,11 @@ class TaskManager(object):
         """
         # reset env every time
         env_worker=EnvWorker(env_type=task.env_type, task_id=task.task_id, instance_id=None, env_service_url=self._env_service_url)
-        llm_chat_fn = self._get_llm_chat_fn() # TODO: better sampling_params for exploring
+        llm_chat_fn = self._get_llm_chat_fn(sampling_params={
+            "temperature": self._exploration_llm_temperature,
+            "top_p": self._exploration_llm_top_p,
+            "top_k": self._exploration_llm_top_k,
+        })
         agent_flow: BaseAgentFlow = AgentFlow(enable_context_generator=False,
                                             llm_chat_fn=llm_chat_fn, 
                                             tokenizer=self._tokenizer, 
@@ -164,7 +188,6 @@ class TaskManager(object):
             input messages: [{"role": "system", "value": "..."}, {"role": "user", "value": "..."}]
             output messages: [{"role": "assistant", "value": "..."}]
             """
-            # TODO: sending sampling_params to rollout server
             updated_sampling_params = {}
             if sampling_params:
                 updated_sampling_params.update(sampling_params)
