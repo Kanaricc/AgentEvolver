@@ -43,6 +43,7 @@ env_service:
   env_url: "http://127.0.0.1:8000"
 
 task_manager:
+  persistent_filepath: tasks_explored.json # tasks will be explored once if set. use it if you want to keep the same explorations.
   n: 2
   bs: 32 # this should be the same as train_batch_size
   max_llm_retries: 3

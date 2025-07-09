@@ -51,11 +51,8 @@ class TaskManagerProps(TypedDict):
     task_summary_history_length: NotRequired[int]
 
 
-# TODO: 筛选
-# TODO: LlmClient 需要适配 policy model
 # TODO: 针对不同环境的统一接口，message-in message-out？那可能不需要这个
 # TODO: 能够替换的 exploration & extraction (summary) strategy
-# TODO: 多线程
 
 
 class TaskManager(object):
@@ -73,7 +70,7 @@ class TaskManager(object):
         self._llm_client = llm_client
         self._old_retrival = old_retrival
         self._env_service_url = env_service_url
-        self._tokenizer = tokenizer  # TODO: 这玩意似乎不该在这
+        self._tokenizer = tokenizer  # cc: 这玩意似乎不该在这
         self._max_llm_retries = kwargs["max_llm_retries"] or 3
         self._max_explore_step = kwargs["max_explore_step"] or 10
         self._num_exploration_threads = kwargs["num_explore_threads"] or 10
@@ -128,7 +125,6 @@ class TaskManager(object):
 
                 self._dataset = OnflyRlDataset(release_used_dataset=True)
             
-            # TODO: trainloader 的 threading 必须是 1
             def reload(self):
                 # avoid data loader calling reload multiple times
                 with lock:
@@ -184,7 +180,7 @@ class TaskManager(object):
         with ThreadPoolExecutor(max_workers=self._num_exploration_threads) as executor:
             # TODO: I have no idea what data_id and rollout_id are.
             futures = [
-                executor.submit(self._step_explore, task, "data_id", "rollout_id")
+                executor.submit(self._step_explore, task, "unknown data_id", "unknown rollout_id")
                 for task in tasks
             ]
             results = [future.result() for future in futures]
@@ -323,6 +319,3 @@ class NaiveTaskObjectiveRetrieval(TaskObjectiveRetrieval):
             self._mp[objective.task.task_id] = []
 
         self._mp[objective.task.task_id].append(objective)
-
-
-# TODO(cc): task manager 的多线程和数据集多线程有冲突似乎

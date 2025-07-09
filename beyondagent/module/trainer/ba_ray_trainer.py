@@ -262,6 +262,8 @@ class BeyondAgentRayPPOTrainer(RayPPOTrainer):
             collate_fn=collate_fn,
             sampler=train_sampler,
         )
+        
+        assert self.train_dataloader.num_workers==1,"dataloader num_workers must be 1 for task manager's on-the-fly data generation"
 
         val_batch_size = self.config.data.val_batch_size  # Prefer config value if set
         if val_batch_size is None:
