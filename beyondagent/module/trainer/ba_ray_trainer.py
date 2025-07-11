@@ -23,7 +23,7 @@ from collections import defaultdict
 from concurrent.futures.thread import ThreadPoolExecutor
 from copy import deepcopy
 from pprint import pprint
-from typing import List
+from typing import List, Optional
 
 from loguru import logger
 import numpy as np
@@ -31,17 +31,20 @@ import ray
 import torch
 from omegaconf import OmegaConf, open_dict
 from tqdm import tqdm
-from torch.utils.data import SequentialSampler,IterableDataset
+from torch.utils.data import SequentialSampler,IterableDataset,Dataset,Sampler
 from torchdata.stateful_dataloader import StatefulDataLoader
+from beyondagent.client.env_client import EnvClient
 from beyondagent.module.task_manager.task_manager import AutoReloadDataset, FullDataset
 from verl import DataProto
 from verl.single_controller.ray import RayClassWithInitArgs, create_colocated_worker_cls
+from verl.single_controller.ray.base import RayWorkerGroup
+from verl.trainer.ppo import core_algos
 from verl.trainer.ppo.core_algos import agg_loss
 from verl.trainer.ppo.metric_utils import (compute_data_metrics,
                                            compute_throughout_metrics,
                                            compute_timing_metrics,
                                            process_validation_metrics)
-from verl.trainer.ppo.ray_trainer import (AdvantageEstimator, RayPPOTrainer,
+from verl.trainer.ppo.ray_trainer import (AdvantageEstimator, RayPPOTrainer, ResourcePoolManager, WorkerType,
                                           _timer, apply_kl_penalty,
                                           compute_advantage,
                                           compute_response_mask, Role)
@@ -56,6 +59,7 @@ from beyondagent.module.task_manager import adapter as task_adapter
 from beyondagent.module.task_manager import TaskManager,NaiveTaskObjectiveRetrieval
 from beyondagent.schema.task import Task
 from beyondagent.schema.trajectory import Trajectory
+from verl.utils.tracking import ValidationGenerationsLogger
 
 
 def parse_reward_from_dataproto(data: DataProto, return_dict=False) -> dict | torch.Tensor:
@@ -98,20 +102,110 @@ def parse_reward_from_dataproto(data: DataProto, return_dict=False) -> dict | to
     else:
         return reward_tensor
 
+
+def create_rl_sampler(data_config, dataset):
+    """Create a sampler for the dataset.
+
+    Arguments:
+        data_config: The data config.
+        dataset (Dataset): The dataset.
+
+    Returns:
+        sampler (Sampler): The sampler.
+    """
+    import torch
+    from torch.utils.data import RandomSampler, SequentialSampler
+
+    # use sampler for better ckpt resume
+    if data_config.shuffle:
+        train_dataloader_generator = torch.Generator()
+        train_dataloader_generator.manual_seed(data_config.get("seed", 1))
+        sampler = RandomSampler(data_source=dataset, generator=train_dataloader_generator)
+    else:
+        sampler = SequentialSampler(data_source=dataset)
+
+    return sampler
+
+
+
 class BeyondAgentRayPPOTrainer(RayPPOTrainer):
     """
     Note that this trainer runs on the driver process on a single CPU/GPU node.
     """
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
+    
+    def __init__(
+        self,
+        config,
+        tokenizer,
+        role_worker_mapping: dict[Role, WorkerType],
+        resource_pool_manager: ResourcePoolManager,
+        train_task_manager:TaskManager,
+        val_task_manager:TaskManager,
+        ray_worker_group_cls: RayWorkerGroup = RayWorkerGroup, # type: ignore
+        processor=None,
+        reward_fn=None,
+        val_reward_fn=None,
+        collate_fn=None,
+        shuffle_trainset:bool=False,
+        device_name="cuda",
+    ):
+        """Initialize distributed PPO trainer with Ray backend."""
+
+        self.tokenizer = tokenizer
+        self.processor = processor
+        self.config = config
+        self.reward_fn = reward_fn
+        self.val_reward_fn = val_reward_fn
+
+        self.hybrid_engine = config.actor_rollout_ref.hybrid_engine
+        assert self.hybrid_engine, "Currently, only support hybrid engine"
+
+        if self.hybrid_engine:
+            assert Role.ActorRollout in role_worker_mapping, f"{role_worker_mapping.keys()=}"
+
+        self.role_worker_mapping = role_worker_mapping
+        self.resource_pool_manager = resource_pool_manager
+        self.use_reference_policy = Role.RefPolicy in role_worker_mapping
+        self.use_rm = Role.RewardModel in role_worker_mapping
+        self.ray_worker_group_cls = ray_worker_group_cls
+        self.device_name = device_name
+        self.validation_generations_logger = ValidationGenerationsLogger()
+
+        # if ref_in_actor is True, the reference policy will be actor without lora applied
+        self.ref_in_actor = config.actor_rollout_ref.model.get("lora_rank", 0) > 0
+
+        # define in-reward KL control
+        # kl loss control currently not suppoorted
+        if config.algorithm.use_kl_in_reward:
+            self.kl_ctrl_in_reward = core_algos.get_kl_controller(config.algorithm.kl_ctrl)
+
+        if self.config.algorithm.adv_estimator == AdvantageEstimator.GAE:
+            self.use_critic = True
+        elif self.config.algorithm.adv_estimator in [
+            AdvantageEstimator.GRPO,
+            AdvantageEstimator.GRPO_PASSK,
+            AdvantageEstimator.REINFORCE_PLUS_PLUS,
+            AdvantageEstimator.REMAX,
+            AdvantageEstimator.RLOO,
+            AdvantageEstimator.OPO,
+            AdvantageEstimator.REINFORCE_PLUS_PLUS_BASELINE,
+        ]:
+            self.use_critic = False
+        else:
+            raise NotImplementedError
+
+        self._validate_config()
+        
         self.em_client: EMClient | None = None
         self.env_manager: ParallelEnvManager | None = None
-        self.task_manager:TaskManager|None=None
         self.thread_pool: ThreadPoolExecutor | None = None
-        
-        self._collate_fn=kwargs.get("collate_fn")
-        self._train_sampler=kwargs.get("train_sampler")
 
+        self.train_task_manager=train_task_manager
+        self.val_task_manager=val_task_manager
+        self._collate_fn=collate_fn
+        
+        self._create_dataloader_from_manager(collate_fn, shuffle_trainset)
+        
 
     def init_workers(self):
         """Initialize distributed training workers using Ray backend.
@@ -204,69 +298,53 @@ class BeyondAgentRayPPOTrainer(RayPPOTrainer):
         self.em_client = EMClient(base_url=self.config.experience_maker.base_url)
         self.env_manager = ParallelEnvManager(config=self.config, async_rollout_manager=self.async_rollout_manager, max_parallel=self.config.actor_rollout_ref.rollout.max_env_worker)
         self.thread_pool = ThreadPoolExecutor(max_workers=self.config.thread_pool.max_workers)
-        
-        # init task manager
-        if self.config.task_manager.llm_client == 'policy':
-            llm_client=self.async_rollout_manager
-            raise NotImplementedError()
-        else:
-            llm_client=DashScopeClient(model_name=self.config.task_manager.llm_client)
-        self.task_manager=TaskManager(
-            config=self.config,
-            llm_client=llm_client, # TODO: use policy model
-            old_retrival=NaiveTaskObjectiveRetrieval(),
-            tokenizer=self.tokenizer,
-            env_service_url=self.config.env_service.env_url,
-            max_llm_retries=self.config.task_manager.max_llm_retries,
-            max_explore_step=self.config.task_manager.max_explore_step,
-            num_explore_threads=self.config.task_manager.num_explore_threads,
-            n=self.config.task_manager.n,
-            task_summary_history_length=self.config.task_manager.task_summary_history_length,
-        )
-        assert isinstance(self.train_dataset,RLHFDataset), "train_dataset must be RLHFDataset"
-        self.task_manager.load_tasks_from_dataset(self.train_dataset,env_type=self.config.env_service.env_type)
-        del self.train_dataset
-        del self.train_dataloader
-        train_dataset=self.task_manager.get_or_load_full_dataset(filepath=self.config.task_manager.persistent_filepath,tokenizer=self.tokenizer,config=self.config.data,processor=self.processor)
-        train_sampler=self._train_sampler
-        # reinit dataloader to use the new dataset
-        self._create_dataloader(train_dataset,self.val_dataset,self._collate_fn,train_sampler)
     
     
-    def _create_dataloader(self, train_dataset, val_dataset, collate_fn, train_sampler):
+    def _create_dataloader_from_manager(self, collate_fn, shuffle_trainset: bool = True):
         """
         Creates the train and validation dataloaders.
         """
         # TODO: we have to make sure the batch size is divisible by the dp size
-        from verl.trainer.main_ppo import create_rl_dataset, create_rl_sampler
-
-        if train_dataset is None:
-            train_dataset = create_rl_dataset(self.config.data.train_files, self.config.data, self.tokenizer, self.processor)
-        if val_dataset is None:
-            val_dataset = create_rl_dataset(self.config.data.val_files, self.config.data, self.tokenizer, self.processor)
-        self.train_dataset, self.val_dataset = train_dataset, val_dataset
-        
-        # 我需要一个不做多余事情的 dataloader
-        # if train_sampler is None:
-        #     train_sampler = create_rl_sampler(self.config.data, self.train_dataset)
         if collate_fn is None:
             from verl.utils.dataset.rl_dataset import collate_fn as default_collate_fn
 
             collate_fn = default_collate_fn
+        
+        
+        from verl.trainer.main_ppo import create_rl_dataset
+        # load train dataset from files or environment
+        env_client=EnvClient()
+        if self.config.data.train_files is not None:
+            train_seed_dataset = create_rl_dataset(self.config.data.train_files, self.config.data, self.tokenizer, self.processor)
+            assert isinstance(train_seed_dataset,RLHFDataset), "train_dataset must be RLHFDataset"
+            self.train_task_manager.load_tasks_from_dataset(train_seed_dataset,env_type=self.config.env_service.env_type)
+        else:
+            self.train_task_manager.load_tasks_from_environment(env_client,env_type=self.config.env_service.env_type,split="train")
+        # load val dataset
+        if self.config.data.val_files is not None:
+            val_seed_dataset = create_rl_dataset(self.config.data.val_files, self.config.data, self.tokenizer, self.processor)
+            assert isinstance(val_seed_dataset,RLHFDataset), "train_dataset must be RLHFDataset"
+            self.val_task_manager.load_tasks_from_dataset(val_seed_dataset,env_type=self.config.env_service.env_type)
+        else:
+            self.val_task_manager.load_tasks_from_environment(env_client,env_type=self.config.env_service.env_type,split="val")
+        
+        self.train_dataset=self.train_task_manager.get_or_load_full_dataset(filepath=self.config.task_manager.train_data_path,tokenizer=self.tokenizer,config=self.config.data,processor=self.processor)
+        self.val_dataset=self.val_task_manager.debug_get_original_seed_dataset(tokenizer=self.tokenizer,config=self.config.data,processor=self.processor)
             
-        assert not isinstance(self.train_dataset,AutoReloadDataset), "disable multiple workers for AutoReloadDataset"
+        assert not isinstance(self.train_dataset,AutoReloadDataset), "please disable multiple workers for AutoReloadDataset"
+        assert not isinstance(self.val_dataset,AutoReloadDataset), "please disable multiple workers for AutoReloadDataset"
         self.train_dataloader = StatefulDataLoader(
             dataset=self.train_dataset,
             batch_size=self.config.data.get("gen_batch_size", self.config.data.train_batch_size),
             num_workers=self.config.data.get("dataloader_num_workers", 8),
             drop_last=True,
             collate_fn=collate_fn,
-            sampler=train_sampler,
+            sampler=create_rl_sampler(self.config.data,self.train_dataset),
         )
 
         val_batch_size = self.config.data.val_batch_size  # Prefer config value if set
         if val_batch_size is None:
-            val_batch_size = len(self.val_dataset)
+            val_batch_size = len(self.val_dataset) # type: ignore
 
         self.val_dataloader = StatefulDataLoader(
             dataset=self.val_dataset,
@@ -282,12 +360,12 @@ class BeyondAgentRayPPOTrainer(RayPPOTrainer):
         assert len(self.val_dataloader) >= 1, "Validation dataloader is empty!"
 
         
-        if not isinstance(train_dataset,IterableDataset):
+        if not isinstance(self.train_dataset,IterableDataset):
             total_training_steps = len(self.train_dataloader) * self.config.trainer.total_epochs
             print(f"Size of train dataloader: {len(self.train_dataloader)}, Size of val dataloader: {len(self.val_dataloader)}")
         else:
             # FIXME: need a elegant way to set total_training_steps
-            total_training_steps = len(self.task_manager.seed_tasks)*self.config.trainer.total_epochs
+            total_training_steps = len(self.train_task_manager.seed_tasks)*self.config.trainer.total_epochs
             print(f"Size of train dataloader: unknown, Size of val dataloader: {len(self.val_dataloader)}")
 
         if self.config.trainer.total_training_steps is not None:
@@ -305,6 +383,7 @@ class BeyondAgentRayPPOTrainer(RayPPOTrainer):
                     self.config.critic.optim.total_training_steps = total_training_steps
         except Exception as e:
             print(f"Warning: Could not set total_training_steps in config. Structure missing? Error: {e}")
+
 
     def _validate_config(self):
         # 0623 yunpeng add. keep the same as the original func except for the param of tool_config_path
@@ -879,3 +958,5 @@ class BeyondAgentRayPPOTrainer(RayPPOTrainer):
             # we expect the train dataset is fully explored at the beginning, no reload needed.
             # if isinstance(self.train_dataset, FullDataset):
             #     self.train_dataset.reload()
+
+

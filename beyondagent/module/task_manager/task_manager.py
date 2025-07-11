@@ -103,7 +103,7 @@ class TaskManager(object):
         self._tasks.extend(adapter.convert_to_tasks(dataset,env_type=env_type))
         logger.info(f"loaded tasks from dataset, current # of tasks={len(self._tasks)}")
     
-    def load_tasks_from_environment(self,env:EnvClient,*,env_type:str,split:str,params:dict):
+    def load_tasks_from_environment(self,env:EnvClient,*,env_type:str,split:str,params:Optional[dict]=None):
         response=env.get_task_ids(env_type,split,params)
         # FIXME: find the query and evaluator type
         self._tasks.extend([Task(task_id=x,env_type=env_type) for x in response])
@@ -138,6 +138,11 @@ class TaskManager(object):
                 dataset.save_to_file(filepath)
         
         return dataset
+    
+    def debug_get_original_seed_dataset(self,*,tokenizer,config,processor)->Dataset:
+        """THIS IS A DEBUG FUNCTION, WILL BE REMOVED IN FUTURE.
+        """
+        return OriginalDataset(self._tasks,tokenizer=tokenizer,config=config,processor=processor)
     
     
     def generate_task(self, tasks: Sequence[Task],*,show_progress=False) -> list[TaskObjective]:
@@ -272,6 +277,26 @@ class TaskManager(object):
             }
 
         return llm_chat
+
+
+class OriginalDataset(Dataset):
+    def __init__(self,tasks:Sequence[Task],*,tokenizer,config, processor):
+        self._tasks=list(tasks)
+        self._tokenizer = tokenizer
+        self._config=config
+        self._processor=processor
+    
+        self._objectives=[TaskObjective(task=x,ground_truth="[env]",confidence=1.0,reward=None) for x in self._tasks]
+        logger.info("mixed original tasks")
+
+        self._dataset = to_rl_dataset(self._objectives, self._tokenizer, self._config,self._processor)
+    
+    
+    def __getitem__(self, index):
+        return self._dataset[index]
+    
+    def __len__(self):
+        return len(self._dataset)
 
 
 class FullDataset(Dataset):

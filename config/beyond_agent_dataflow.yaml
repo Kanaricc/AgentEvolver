@@ -43,7 +43,8 @@ env_service:
   env_url: "http://127.0.0.1:8000"
 
 task_manager:
-  persistent_filepath: tasks_explored.json # tasks will be explored once if set. use it if you want to keep the same explorations.
+  train_data_path: tasks_explored.train.json # tasks will be explored once if set. use it if you want to keep the same explorations.
+  val_data_path: tasks_explored.val.json # tasks will be explored once if set. use it if you want to keep the same explorations.
   llm_client: qwen-plus # policy, or other llm name provided in DashScopeClient
   n: 2
   bs: ${data.train_batch_size} # this should be the same as train_batch_size
@@ -51,7 +52,7 @@ task_manager:
   max_explore_step: 15
   task_summary_history_length: 10
   # num_explore_threads: ${thread_pool.max_workers}
-  num_explore_threads: 5
+  num_explore_threads: 10
 
   use_original_tasks: True # mix original tasks with synthetic tasks
 

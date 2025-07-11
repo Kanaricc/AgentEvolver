@@ -15,6 +15,9 @@
 Note that we don't combine the main with ray_trainer as ray_trainer is used by other main.
 """
 from best_logger import register_logger
+from beyondagent.client.llm_client import DashScopeClient
+from beyondagent.module.task_manager.base import NaiveTaskObjectiveRetrieval
+from beyondagent.module.task_manager.task_manager import TaskManager
 
 non_console_mods = ["appworld_io"]
 register_logger(non_console_mods=non_console_mods, auto_clean_mods=[], base_log_path="logs/beyondagent", debug=True)
@@ -179,10 +182,32 @@ class TaskRunner:
 
         from verl.utils.dataset.rl_dataset import collate_fn
         
-        # TODO: 弄进taskmanager
-        train_dataset = create_rl_dataset(config.data.train_files, config.data, tokenizer, processor)
-        val_dataset = create_rl_dataset(config.data.val_files, config.data, tokenizer, processor)
-        train_sampler = create_rl_sampler(config.data, train_dataset)
+        # init task manager
+        llm_client=DashScopeClient(model_name=config.task_manager.llm_client)
+        train_task_manager=TaskManager(
+            config=config,
+            llm_client=llm_client, # TODO: use policy model
+            old_retrival=NaiveTaskObjectiveRetrieval(),
+            tokenizer=tokenizer,
+            env_service_url=config.env_service.env_url,
+            max_llm_retries=config.task_manager.max_llm_retries,
+            max_explore_step=config.task_manager.max_explore_step,
+            num_explore_threads=config.task_manager.num_explore_threads,
+            n=config.task_manager.n,
+            task_summary_history_length=config.task_manager.task_summary_history_length,
+        )
+        val_task_manager=TaskManager(
+            config=config,
+            llm_client=llm_client, # TODO: use policy model
+            old_retrival=NaiveTaskObjectiveRetrieval(),
+            tokenizer=tokenizer,
+            env_service_url=config.env_service.env_url,
+            max_llm_retries=config.task_manager.max_llm_retries,
+            max_explore_step=config.task_manager.max_explore_step,
+            num_explore_threads=config.task_manager.num_explore_threads,
+            n=config.task_manager.n,
+            task_summary_history_length=config.task_manager.task_summary_history_length,
+        )
         trainer = BeyondAgentRayPPOTrainer(
             config=config,
             tokenizer=tokenizer,
@@ -192,10 +217,9 @@ class TaskRunner:
             ray_worker_group_cls=ray_worker_group_cls,
             reward_fn=reward_fn,
             val_reward_fn=val_reward_fn,
-            train_dataset=train_dataset,
-            val_dataset=val_dataset,
+            train_task_manager=train_task_manager,
+            val_task_manager=val_task_manager,
             collate_fn=collate_fn,
-            train_sampler=train_sampler,
             device_name=config.trainer.device,
         )
         trainer.init_workers()
@@ -237,28 +261,7 @@ def create_rl_dataset(data_paths, data_config, tokenizer, processor):
     return dataset
 
 
-def create_rl_sampler(data_config, dataset):
-    """Create a sampler for the dataset.
 
-    Arguments:
-        data_config: The data config.
-        dataset (Dataset): The dataset.
-
-    Returns:
-        sampler (Sampler): The sampler.
-    """
-    import torch
-    from torch.utils.data import RandomSampler, SequentialSampler
-
-    # use sampler for better ckpt resume
-    if data_config.shuffle:
-        train_dataloader_generator = torch.Generator()
-        train_dataloader_generator.manual_seed(data_config.get("seed", 1))
-        sampler = RandomSampler(data_source=dataset, generator=train_dataloader_generator)
-    else:
-        sampler = SequentialSampler(data_source=dataset)
-
-    return sampler
 
 
 if __name__ == "__main__":
