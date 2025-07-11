@@ -88,7 +88,7 @@ class TaskManager(object):
 
         # 混合原有数据和生成数据
         # TODO: a better mixture strategy is possible
-        self._use_original_tasks = kwargs.get("use_original_tasks", 0.0)
+        self._use_original_tasks = kwargs.get("use_original_tasks", False)
 
         self._filters: list[TaskPostFilter] = []
 
@@ -106,13 +106,14 @@ class TaskManager(object):
             config: DictConfig. Only for RLHFDataset.
         """
 
-        return AutoReloadDataset(self,tasks,bs,tokenizer=tokenizer,config=config,processor=processor)
+        return AutoReloadDataset(self,tasks,bs,self._use_original_tasks,tokenizer=tokenizer,config=config,processor=processor)
     
     def get_or_load_full_dataset(self,tasks:Sequence[Task],filepath:Optional[str],*,config,tokenizer,processor)->"FullDataset":
         """Get the full dataset, or load from file.
         """     
-        dataset=FullDataset(self,tasks,tokenizer=tokenizer,config=config,processor=processor)
+        dataset=FullDataset(self,tasks,self._use_original_tasks,tokenizer=tokenizer,config=config,processor=processor)
         if filepath is not None and os.path.exists(filepath):
+            logger.info(f"loading full dataset from {filepath}")
             dataset.load_from_file(filepath)
         else:
             # FIXME: debug
@@ -127,10 +128,6 @@ class TaskManager(object):
     def generate_task(self, tasks: Sequence[Task],*,show_progress=False) -> list[TaskObjective]:
         task_q = list(copy.copy(tasks)) * self._n
         res = []
-        
-        # mix original task
-        if self._use_original_tasks:
-            res.extend([TaskObjective(task=x,description=str(x.query),ground_truth="[env]",confidence=1.0,reward=None) for x in tasks])
         
         # 每次最多探索所有不同任务，或者最大线程个任务，防止同批次中生成相同任务
         parallel_num = min(self._num_exploration_threads, len(tasks))
@@ -266,9 +263,10 @@ class FullDataset(Dataset):
     """FullDataset
     """
     
-    def __init__(self,manager:TaskManager, tasks:Sequence[Task],*,tokenizer,config, processor):
+    def __init__(self,manager:TaskManager, tasks:Sequence[Task],mix_origins:bool=False,*,tokenizer,config, processor):
         self._manager=manager
         self._tasks=list(tasks)
+        self._mix_origins=mix_origins
         self._tokenizer = tokenizer
         self._config=config
         self._processor=processor
@@ -280,10 +278,21 @@ class FullDataset(Dataset):
     def load_from_file(self,filepath:str):
         with open(filepath,"r") as f:
             self._objectives=[TaskObjective.parse_raw(line) for line in filter(lambda x: x.strip()!="", f.readlines())]
+        # mix
+        if self._mix_origins:
+            self._objectives.extend([TaskObjective(task=x,description=str(x.query),ground_truth="[env]",confidence=1.0,reward=None) for x in self._tasks])
+            logger.info("mixed original tasks")
+        random.shuffle(self._objectives)
+
         self._dataset = to_rl_dataset(self._objectives, self._tokenizer, self._config,self._processor)
     
     def reload(self):
         self._objectives=self._manager.generate_task(self._tasks,show_progress=True)
+        # mix
+        if self._mix_origins:
+            self._objectives.extend([TaskObjective(task=x,description=str(x.query),ground_truth="[env]",confidence=1.0,reward=None) for x in self._tasks])
+            logger.info("mixed original tasks")
+        random.shuffle(self._objectives)
         self._dataset = to_rl_dataset(self._objectives, self._tokenizer, self._config,self._processor)
     
     def __getitem__(self, index):
@@ -299,10 +308,12 @@ class AutoReloadDataset(IterableDataset):
     
     the number of workers of DataLoader must be 1.
     """
-    def __init__(self,manager:TaskManager, tasks:Iterable[Task], bs: int, *, tokenizer, config, processor):
+    def __init__(self,manager:TaskManager, tasks:Iterable[Task], bs: int, mix_origins:bool=False, *, tokenizer, config, processor):
         self._manager=manager
         self._tasks=tasks
         self._bs = bs
+        self._mix_origins=mix_origins
+        assert self._mix_origins==False, "mix_origins is not supported yet"
         self._tokenizer = tokenizer
         self._config=config
         self._processor = processor

@@ -874,6 +874,6 @@ class BeyondAgentRayPPOTrainer(RayPPOTrainer):
                     progress_bar.close()
                     return
             
-            if isinstance(self.train_dataset, FullDataset):
-                pprint("Reloading train dataset...")
-                self.train_dataset.reload()
+            # we expect the train dataset is fully explored at the beginning, no reload needed.
+            # if isinstance(self.train_dataset, FullDataset):
+            #     self.train_dataset.reload()
