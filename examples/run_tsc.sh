@@ -11,16 +11,14 @@ CONFIG_PATH="$PROJECT_DIR/config"
 # completion_callback=none
 env_url=http://localhost:8000
 current_time=$(date "+%Y%m%d_%H%M%S")
-log_file="tsc_trainer_plot_poshigh_neghigh_${current_time}.log"
-EN_MASK="pos-high-neg-high"
-EN_RHO=0.8
+log_file="logs/tsc_sem_assign_bad0.2_${current_time}.log"
+EN_SAVE_DIR="./save_dir/save_entropy"
 
 python3 -m beyondagent.main_ppo \
     --config-path="$CONFIG_PATH" \
     --config-name='beyond_agent_dataflow' \
     env_service.env_url=$env_url \
-    +actor_rollout_ref.actor.entropy_mask.rho=$EN_RHO \
-    +actor_rollout_ref.actor.entropy_mask.mode=$EN_MASK \
+    save_dir=$EN_SAVE_DIR \
     algorithm.adv_estimator=grpo \
     data.train_batch_size=16 \
     data.max_prompt_length=4096 \
@@ -59,14 +57,14 @@ python3 -m beyondagent.main_ppo \
     trainer.critic_warmup=0 \
     trainer.logger=['console','wandb'] \
     trainer.project_name='beyondagent' \
-    trainer.experiment_name="qwen2.5-7b_appworld_tsc_trainer_plot_poshigh_neghigh_8gpu" \
+    trainer.experiment_name="qwen2.5-7b_appworld_tsc_sem_assign_bad0.2_8gpu" \
     trainer.nnodes=1 \
     trainer.save_freq=-1 \
     trainer.test_freq=20 \
     trainer.total_epochs=20 \
     trainer.val_before_train=True \
-    trainer.validation_data_dir="experiments/exp_tsc_trainer_plot_poshigh_neghigh${current_time}/validation_log" \
-    trainer.rollout_data_dir="experiments/exp_tsc_trainer_plot_poshigh_neghigh${current_time}/rollout_log" \
+    trainer.validation_data_dir="experiments/exp_tsc_sem_assign_bad0.2${current_time}/validation_log" \
+    trainer.rollout_data_dir="experiments/exp_tsc_sem_assign_bad0.2${current_time}/rollout_log" \
     actor_rollout_ref.actor.ppo_max_token_len_per_gpu=20480 \
     actor_rollout_ref.rollout.log_prob_max_token_len_per_gpu=20480 \
     actor_rollout_ref.ref.log_prob_max_token_len_per_gpu=20480 \

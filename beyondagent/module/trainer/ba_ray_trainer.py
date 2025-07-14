@@ -49,7 +49,11 @@ from beyondagent.client.em_client import EMClient
 from beyondagent.module.env_manager.env_manager import ParallelEnvManager
 from beyondagent.schema.task import Task
 from beyondagent.schema.trajectory import Trajectory
-
+from beyondagent.utils.plot_entropy import log_token_entropy
+# from beyondagent.module.advantage_assignment.token_level_assignment import _add_entropy_mask as _add_advantage_mask
+from beyondagent.module.advantage_assignment.semantic_level_assignment import (
+    evaluate_step_flags, apply_step_mask
+)
 
 def parse_reward_from_dataproto(data: DataProto, return_dict=False) -> dict | torch.Tensor:
     """
@@ -443,69 +447,7 @@ class BeyondAgentRayPPOTrainer(RayPPOTrainer):
 
         return metric_dict
 
-    def _add_entropy_mask(
-        self, entropy, rho, response_mask, adv=None, mode="pos-high-neg-high"
-    ):
-        # print('response_mask',response_mask)
-        new_mask = response_mask.bool()
-        flat_entropy = entropy[new_mask]  # 只统计有效 token
-
-        # print('new_mask',new_mask.shape)
-        # print('flat_entropy',flat_entropy)
-        # print('flat_entropy shape',flat_entropy.shape)
-        # exit(0)
-        # print('maskori', response_mask.bool())
-        def _quantile_threshold(flat_values: torch.Tensor, q: float) -> float:
-            return torch.quantile(flat_values, q=q, interpolation="higher").item()
-
-        if adv is None:
-            raise ValueError("`adv` must be provided when mode='pos-high-neg-low'")
-
-        adv_row = adv[:, 0]
-        pos_rows = adv_row > 0
-        neg_rows = adv_row < 0
-
-        pos_mask_rows = pos_rows.unsqueeze(-1).expand_as(new_mask)
-        pos_mask = pos_mask_rows & new_mask
-        entropy_pos = verl_F.masked_mean(entropy, pos_mask)
-
-        neg_mask_rows = neg_rows.unsqueeze(-1).expand_as(new_mask)
-        neg_mask = neg_mask_rows & new_mask
-        entropy_neg = verl_F.masked_mean(entropy, neg_mask)
-
-        entropy_pos_neg = (entropy_pos.detach().item(), entropy_neg.detach().item())
-        print("entropy_pos_neg", entropy_pos_neg)
-        # exit(0)
-
-        if mode == "pos-high-neg-high":
-            flat_entropy = entropy[new_mask]  # 只统计有效 token
-            tau = _quantile_threshold(flat_entropy, q=rho)
-            new_mask &= entropy >= tau  # 保留高熵
-            tau_rho = (tau, tau)
-
-        elif mode == "pos-high-neg-low":
-
-            if isinstance(rho, (list, tuple)):
-                rho_pos, rho_neg = float(rho[0]), float(rho[1])
-            else:
-                rho_pos = rho_neg = float(rho)  # 若只给一个值，默认两边都用同一个
-
-            tau_pos = _quantile_threshold(flat_entropy, q=rho_pos)
-            new_mask &= (~pos_mask_rows) | (entropy >= tau_pos)
-            tau_neg = _quantile_threshold(
-                flat_entropy, q=1.0 - rho_neg
-            )  # 负样本要屏蔽高熵 ⇒ 取 (1-ρ_neg) 分位阈值
-            new_mask &= (~neg_mask_rows) | (entropy <= tau_neg)
-
-            tau_rho = (tau_pos, tau_neg)
-            print("tau_rho", tau_rho)
-
-        elif mode == None:
-            new_mask = response_mask
-            tau_rho = None
-        else:
-            raise
-        return new_mask.to(response_mask.dtype), tau_rho, entropy_pos_neg
+    
     def fit(self):
         """
         The training loop of PPO.
@@ -743,25 +685,52 @@ class BeyondAgentRayPPOTrainer(RayPPOTrainer):
                             multi_turn=self.config.actor_rollout_ref.rollout.multi_turn.enable,
                             config=self.config.algorithm,
                         )
-                        # breakpoint()
-                        rho  = self.config.actor_rollout_ref.actor.entropy_mask.rho       # 例如 0.2
-                        mode = self.config.actor_rollout_ref.actor.entropy_mask.mode       # "pos-high-neg-high" / "pos-high-neg-low" / None
 
-                        entropy_mask, tau, (ent_pos, ent_neg) = self._add_entropy_mask(
-                            entropy       = batch.batch["entropys"],          # (bs, resp_len)
-                            rho           = rho,
-                            response_mask = batch.batch["response_mask"],     # 初始 mask（padding / multi_turn）
-                            adv           = batch.batch["advantages"],        # (bs, 1) or (bs, resp_len)
-                            mode          = mode,
-                        )
+                        # # ===========  0714 shuchang: add semantic mask  =========== 
+                        step_flags = evaluate_step_flags(
+                            tokenizer  = self.tokenizer,
+                            batch      = batch,
+                        )                                   # list[list[bool]]
+                        apply_step_mask(
+                            batch        = batch,
+                            step_flags   = step_flags,
+                            good_scale   = 1.0,
+                            bad_scale    = 0.2,
+                        )                  # breakpoint()
+                        # # ===========  0714 shuchang: add semantic mask  =========== 
+                        # # ---------------- token-entropy logging ----------------
+                        # responses       = batch.batch["responses"]         # (bs, resp_len)
+                        # response_masks  = batch.batch["response_mask"]     # True 表示有效 token
+                        # log_token_entropy(
+                        #     tokenizer      = self.tokenizer,
+                        #     responses      = responses.cpu(),
+                        #     entropys       = entropys.cpu(),
+                        #     masks          = response_masks.cpu(),
+                        #     global_step    = self.global_steps,
+                        #     save_dir       = self.config.save_dir,               # 也可写成 config 里的路径
+                        #     print_first_n  = 1,                            # 只想打印更多可调这个值
+                        # )
 
-                        batch.batch["response_mask"] = entropy_mask           # 覆盖为“高熵”版本
-                        metrics.update({                                       # 记录诊断指标（可选）
-                            "actor/tau_pos": tau[0] if tau else 0.0,
-                            "actor/tau_neg": tau[1] if tau else 0.0,
-                            "actor/entropy_pos": ent_pos,
-                            "actor/entropy_neg": ent_neg,
-                        })
+                        # # =========== add entropy mask ===========
+                        # # 0710 shuchang: add entropy mask for actor rollout
+                        # rho  = self.config.actor_rollout_ref.actor.entropy_mask.rho       # 例如 0.2
+                        # mode = self.config.actor_rollout_ref.actor.entropy_mask.mode       # "pos-high-neg-high" / "pos-high-neg-low" / None
+
+                        # entropy_mask, tau, (ent_pos, ent_neg) = _add_advantage_mask(
+                        #     entropy       = batch.batch["entropys"],          # (bs, resp_len)
+                        #     rho           = rho,
+                        #     response_mask = batch.batch["response_mask"],     # 初始 mask（padding / multi_turn）
+                        #     adv           = batch.batch["advantages"],        # (bs, 1) or (bs, resp_len)
+                        #     mode          = mode,
+                        # )
+
+                        # batch.batch["response_mask"] = entropy_mask           # 覆盖为“高熵”版本
+                        # metrics.update({                                       # 记录诊断指标（可选）
+                        #     "actor/tau_pos": tau[0] if tau else 0.0,
+                        #     "actor/tau_neg": tau[1] if tau else 0.0,
+                        #     "actor/entropy_pos": ent_pos,
+                        #     "actor/entropy_neg": ent_neg,
+                        # })
 
                     # update critic
                     if self.use_critic:
