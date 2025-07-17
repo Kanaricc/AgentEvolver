@@ -43,7 +43,7 @@ def to_rl_dataset(
         # 构建单条记录
         record = {
             "data_source": task.env_type,
-            "prompt": [{"content": str(task.task_id), "role": "user"}], # `prompt` is never used. trainer will get trajectories from env. metrics code needs this to group results.
+            "prompt": [{"content": str(task.task_id)+str(task.query), "role": "user"}], # `prompt` is never used. trainer will get trajectories from env. metrics code needs this to group results.
             "reward_model": {"ground_truth": ground_truth, "style": "rule"},
             "uuid": str(uuid.uuid4()),
             "extras": {
