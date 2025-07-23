@@ -14,16 +14,13 @@ from beyondagent.utils.utils import convert_tool_to_user_message, clip_state_con
 
 class AgentFlow(BaseAgentFlow):
 
-    def __init__(self,reward_calculator:Optional[RewardCalculator]=None,enable_context_generator:Optional[bool]=None, **kwargs):
+    def __init__(self,reward_calculator:Optional[RewardCalculator]=None, **kwargs):
         super().__init__(**kwargs)
         # 优先传入的参数
         self._reward_calculator = reward_calculator
         if self._reward_calculator is not None:
             logger.info(f"reward_calculator={self._reward_calculator}")
-        self._enable_context_generator = enable_context_generator
-        # TODO: 重构代码，避免额外的适配
-        if self._enable_context_generator==None:
-            self._enable_context_generator=self.config.experience_maker.enable_context_generator
+        self._enable_context_generator=self.config.experience_maker.enable_context_generator
 
         self.instruction_template_ids = self.tokenizer.encode("<|im_start|>user\n")
         self.response_template_ids = self.tokenizer.encode("<|im_start|>assistant\n")

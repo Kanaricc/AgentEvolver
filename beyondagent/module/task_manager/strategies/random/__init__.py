@@ -4,8 +4,8 @@ from typing import Callable, NotRequired, Optional, Sequence, TypedDict, Unpack
 
 from loguru import logger
 
-from beyondagent.module.agent_flow.agent_flow import AgentFlow
 from beyondagent.module.agent_flow.base_agent_flow import BaseAgentFlow
+from beyondagent.module.task_manager.agent_flow import ExplorationAgentFlow
 from beyondagent.module.task_manager.explorer import Explorer
 from beyondagent.module.task_manager.strategies.random.prompts.prompt_explore import get_agent_interaction_system_prompt
 from beyondagent.module.task_manager.strategies.random.prompts.prompt_summarize import (
@@ -57,7 +57,7 @@ class LlmRandomSamplingExploreStrategy(TaskExploreStrategy):
                 "top_k": self._exploration_llm_top_k,
             }
         )
-        agent_flow: BaseAgentFlow = AgentFlow(
+        agent_flow: BaseAgentFlow = ExplorationAgentFlow(
             enable_context_generator=False,
             llm_chat_fn=llm_chat_fn,
             tokenizer=self._tokenizer,
