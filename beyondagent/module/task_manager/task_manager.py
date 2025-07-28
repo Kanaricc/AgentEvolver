@@ -166,8 +166,8 @@ class TaskManager(object):
                 self._old_retrival.reset()
                 for i in res:
                     self._old_retrival.add_objective(i)
-                
                     
+        res = functools.reduce(lambda x, f: f.filter(x), self._realtime_filters, res)
         # post filter
         logger.info("running post filter on generated tasks")
         cnt_before_filter=len(res)
@@ -252,25 +252,24 @@ class FullDataset(Dataset):
     
     def save_to_file(self, filepath: str):
         """保存objectives到文件"""
-        objectives_without_origins=list(filter(lambda x:x.task.evaluator!="env",self._objectives))
         with open(filepath, "w") as f:
-            f.writelines([ob.json() + "\n" for ob in objectives_without_origins])
+            f.writelines([ob.json() + "\n" for ob in self._synthetic_objectives])
         logger.info(f"Saved {len(self._objectives)} objectives to {filepath}")
     
     def load_from_file(self, filepath: str):
         """从文件加载objectives"""
         if os.path.exists(filepath):
             with open(filepath, "r") as f:
-                synthetic_objectives = [
+                self._synthetic_objectives = [
                     TaskObjective.parse_raw(line) 
                     for line in filter(lambda x: x.strip() != "", f.readlines())
                 ]
         else:
             logger.warning(f"failed to load objectives from {filepath}, file not found.")
-            synthetic_objectives = []
+            self._synthetic_objectives = []
         
         # 使用混合策略处理数据
-        self._objectives = self._mixture_strategy.mix_data(synthetic_objectives, self._tasks)
+        self._objectives = self._mixture_strategy.mix_data(self._synthetic_objectives, self._tasks)
         
         # 转换为RL dataset
         self._dataset = to_rl_dataset(self._objectives, self._tokenizer, self._config, self._processor)
@@ -279,10 +278,10 @@ class FullDataset(Dataset):
     def reload(self):
         """重新生成数据"""
         # 生成合成数据
-        synthetic_objectives = self._manager.generate_task([x.task for x in self._tasks], show_progress=True)
+        self._synthetic_objectives = self._manager.generate_task([x.task for x in self._tasks], show_progress=True)
         
         # 使用混合策略处理数据
-        self._objectives = self._mixture_strategy.mix_data(synthetic_objectives, self._tasks)
+        self._objectives = self._mixture_strategy.mix_data(self._synthetic_objectives, self._tasks)
         
         # 转换为RL dataset
         self._dataset = to_rl_dataset(self._objectives, self._tokenizer, self._config, self._processor)
