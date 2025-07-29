@@ -1,3 +1,4 @@
+import re
 TEMPLATE = """# Execution Records Compression Task
 
 You need to intelligently compress and summarize execution records in the following format:

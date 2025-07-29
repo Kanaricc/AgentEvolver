@@ -23,6 +23,11 @@ Provide your detailed analysis first, explaining your reasoning for each evaluat
 
 First provide your detailed reasoning analysis, then output a continuous score between 0.0 and 1.0 enclosed in <reward></reward> tags, e.g., <reward>0.75</reward>
 """
+# query & reward improvement
+# TODO 可以与 appworld grader 算【相关性】
+# 非 sparse reward 对 llm 的要求会比较低
+# use 0～100
+# 要试试把 reference traj 拿过来吗
 
 class LlmAsJudgeRewardCalculator(RewardCalculator):
     """
