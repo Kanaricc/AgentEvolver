@@ -804,6 +804,7 @@ def apply_step_mask_vectorized(tokenizer, batch, step_flags: List[List[bool]], c
 
         for step_id, is_good in enumerate(current_step_flags):
             step_mask = (sample_step_ids == step_id)
+            assert step_mask.any(), f"[vectorized_mask][ERROR] step_id {step_id} not found in sample {b}"
             if not step_mask.any():
                 continue
 

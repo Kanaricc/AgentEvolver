@@ -51,6 +51,7 @@ def _split_steps_and_ids(
     step_texts = []
 
     markers = (
+        [(0, "assistant")] + 
         [(i, "assistant") for i in assistant_body_start_idxs] +
         [(i, "human")     for i in human_start_idxs] +
         [(len(response_ids), "end")]
