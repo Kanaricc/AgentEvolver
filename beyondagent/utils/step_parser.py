@@ -394,6 +394,13 @@ def test_parse_response_ids_to_steps():
             response_messages = test_messages[1:]  # 从assistant开始的所有消息
             response_text = tokenizer.apply_chat_template(response_messages, tokenize=False, add_generation_prompt=False)
             response_tokens = tokenizer.encode(response_text, add_special_tokens=False)
+
+            prompt_ids = tokenizer.apply_chat_template(test_messages[:1], tokenize=True, add_generation_prompt=True)
+            full_ids = tokenizer.apply_chat_template(test_messages, tokenize=True)
+            response_tokens = full_ids[len(prompt_ids):]
+            print(f"\n=== decoded response_tokens ===")
+            print(tokenizer.decode(response_tokens))
+
             
             # 测试解析
             print(f"\n=== 测试Step解析 ===")
