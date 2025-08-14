@@ -269,13 +269,22 @@ class FullDataset(Dataset):
         """从文件加载objectives"""
         if os.path.exists(filepath):
             with open(filepath, "r") as f:
-                self._synthetic_objectives = [
-                    TaskObjective.parse_raw(line) 
-                    for line in filter(lambda x: x.strip() != "", f.readlines())
-                ]
+                self._synthetic_objectives = []
+                for line in filter(lambda x: x.strip() != "", f.readlines()):
+                    tmp=TaskObjective.parse_raw(line)
+                    # patch old data
+                    if tmp.ground_truth is None:
+                        tmp.ground_truth = json.loads(line)['ground_truth']
+                    
+                    self._synthetic_objectives.append(tmp)
+                
         else:
             logger.warning(f"failed to load objectives from {filepath}, file not found.")
             self._synthetic_objectives = []
+        
+        # check gt exists
+        for item in self._synthetic_objectives:
+            assert item.ground_truth is not None
         
         logger.info("patching grader config to all synthetic data")
         for item in self._synthetic_objectives:
