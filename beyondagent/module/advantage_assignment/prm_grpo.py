@@ -382,7 +382,7 @@ def compute_prm_grpo_advantages(
     if token_level_rewards is None:
         raise KeyError("token-level rewards not found in batch (tried keys: token_level_rewards / response_token_level_rewards / token_rewards)")
 
-    # ---- ORM_sign = ±1（保持 sum>0 → +1；sum<=0 → -1）----
+    # ---- orm_score = ±1（保持 sum>0 → +1；sum<=0 → -1）----
     # TODO: ORM做normalization
     orm_sum = token_level_rewards.sum(dim=1)   # (B,)
     orms_score = torch.where(orm_sum > 0, torch.ones_like(orm_sum), -torch.ones_like(orm_sum)).to(dtype=torch.float32)

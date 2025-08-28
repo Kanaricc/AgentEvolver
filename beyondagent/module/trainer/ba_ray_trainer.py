@@ -762,6 +762,8 @@ class BeyondAgentRayPPOTrainer(RayPPOTrainer):
                                 do_batch_zscore=bool(getattr(prm_cfg, "do_batch_zscore", True)),
                                 traj_equal_zscore=bool(getattr(prm_cfg, "traj_equal_zscore", True)),
                                 fix_base=float(getattr(prm_cfg, "fix_base", 0.2)),
+                                alpha=float(getattr(prm_cfg, "alpha", 0.1)),
+                                orm_distribution=getattr(prm_cfg, "orm_distribution", "last_step" ),  # "all" | "pos" | "neg"
                             )
 
                             scheme = getattr(prm_cfg, "prm_scheme", "allocation_c")
