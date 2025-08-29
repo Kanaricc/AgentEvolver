@@ -1307,6 +1307,11 @@ class BeyondAgentRayPPOTrainer(RayPPOTrainer):
             # we expect the train dataset is fully explored at the beginning, no reload needed.
             # if isinstance(self.train_dataset, FullDataset):
             #     self.train_dataset.reload()
+            if os.environ.get("DEBUG_ARG")=="ratio_decay":
+                from beyondagent.module.task_manager.data_mixture import UnifiedMixtureStrategy
+                print("DEBUG: change ratio of synthetic data from 1 to 0.5")
+                assert isinstance(self.train_dataset._mixture_strategy,UnifiedMixtureStrategy)
+                self.train_dataset._mixture_strategy._synthetic_ratio-=1/5 # initial 1, 0 at about epoch 5 (about step 30)
             self.train_dataset.update()
 
 
