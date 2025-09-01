@@ -749,7 +749,7 @@ class BeyondAgentRayPPOTrainer(RayPPOTrainer):
                             # 读取语义优势总配置与 PRM 子配置
                             prm_cfg = getattr(sem_cfg, "prm_grpo", None)
 
-                            # PRM 超参（权重在 sem_cfg 顶层，zscore/fix_base 在 prm_cfg）
+                            # PRM 超参（权重在 sem_cfg 顶层，fix_base 在 prm_cfg）
                             _cons = float(getattr(sem_cfg, "consistent_scale", 1.0))
                             _posu = float(getattr(sem_cfg, "pos_unconsistent_scale", 0.2))
                             _negu = float(getattr(sem_cfg, "neg_unconsistent_scale", 0.2))
@@ -759,10 +759,10 @@ class BeyondAgentRayPPOTrainer(RayPPOTrainer):
                                 consistent_scale=_cons,
                                 pos_unconsistent_scale=_posu,
                                 neg_unconsistent_scale=_negu,
-                                do_batch_zscore=bool(getattr(prm_cfg, "do_batch_zscore", True)),
-                                traj_equal_zscore=bool(getattr(prm_cfg, "traj_equal_zscore", True)),
+                                do_batch_norm=bool(getattr(prm_cfg, "do_batch_norm", True)),
+                                equal_trajectory_weight=bool(getattr(prm_cfg, "equal_trajectory_weight", True)),
                                 fix_base=float(getattr(prm_cfg, "fix_base", 0.2)),
-                                alpha=float(getattr(prm_cfg, "alpha", 0.1)),
+                                alpha=float(getattr(prm_cfg, "alpha", 1.0)), # 保持 alpha=1.0 以匹配 eb5f2db 的 decouple 行为
                                 orm_distribution=getattr(prm_cfg, "orm_distribution", "last_step" ),  # "all" | "pos" | "neg"
                             )
 

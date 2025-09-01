@@ -77,10 +77,10 @@ semantic_advantage:
   prm_grpo:
     enable_prm_grpo: false
     prm_scheme: allocation_c           # fix | allocation | allocation_c | decouple
-    do_batch_zscore: true
-    traj_equal_zscore: true
+    do_batch_norm: true
+    equal_trajectory_weight: true
     fix_base: 0.2
-    alpha: 0.2
+    alpha: 1.0
     orm_distribution: last_step
 
 
