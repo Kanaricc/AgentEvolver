@@ -125,3 +125,4 @@ semantic_advantage:
     orm_distribution: last_step
     enable_length_normalization: false   # 新增参数，控制是否进行长度正则化
     prm_epoch: 100
+    skip_type: "skip_small_adv"               # "none" | "skip_small_adv" | "skip_all_neg"

@@ -1077,6 +1077,7 @@ class BeyondAgentRayPPOTrainer(RayPPOTrainer):
                                 save_dir=getattr(sem_cfg, 'llm_evaluation_log_dir', None),
                                 global_step=self.global_steps,
                                 epoch=f"train.{epoch}.{i}",
+                                skip_type=getattr(prm_cfg, 'skip_type', "skip_small_adv"),
                             )
 
                             # === (C) PRM → GRPO 后缀和 ===

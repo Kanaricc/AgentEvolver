@@ -368,7 +368,7 @@ async def _evaluate_single_sample_api(
 # 统一的并行评估接口
 # ————————————————————————————————————————————————————————————————
 
-async def evaluate_step_flags_parallel(tokenizer, batch, overall_score_source: str = "advantages",  model_name: str = "qwen-max", evaluation_type: Literal["api"] = "api", max_concurrent: int = 20, batch_size_limit: int = 100, mask_tensor: torch.Tensor = None, api_max_retries: int = 200, save_dir: Optional[str] = None, global_step: Optional[int] = None, epoch: Optional[str] = None) -> Tuple[List[List[bool]], Dict]:
+async def evaluate_step_flags_parallel(tokenizer, batch, overall_score_source: str = "advantages",  model_name: str = "qwen-max", evaluation_type: Literal["api"] = "api", max_concurrent: int = 20, batch_size_limit: int = 100, mask_tensor: torch.Tensor = None, api_max_retries: int = 200, save_dir: Optional[str] = None, global_step: Optional[int] = None, epoch: Optional[str] = None, skip_type: str='skip_small_adv') -> Tuple[List[List[bool]], Dict]:
     """并行评估step flags，每个sample一次API调用评估所有steps
     NOTE: SSA中根据advantage评估 和 PRM-GRPO中根据ORM评估均可使用本函数
     """
@@ -439,8 +439,14 @@ async def evaluate_step_flags_parallel(tokenizer, batch, overall_score_source: s
             # SSA 模式：使用计算后的 advantage
             overall_score = _get_overall_advantage(batch.batch["advantages"][sample_idx], sample_mask)
         # shuchang: 0904
-        # FIXME: 只跳过 advantage 非常小的样本
-        if abs(_get_overall_advantage(batch.batch["advantages"][sample_idx], sample_mask)) < 1e-8:
+        # FIXME: 只跳过 advantage 非常小的样本 或 全部为负的样本
+        if skip_type == "skip_small_adv":
+            skip_part = _get_overall_advantage(batch.batch["advantages"][sample_idx], sample_mask)
+        elif skip_type == "skip_all_neg":
+            skip_part = batch.batch["token_level_rewards"][sample_idx].sum().item()
+        else:
+            skip_part = 1.0  # 不跳过
+        if abs(skip_part) < 1e-8:
             print(f"[parallel_eval] Sample {sample_idx}: advantage≈0 ({overall_score:.6f}), skipping evaluation, returning all GOOD")
             flags_per_sample[sample_idx] = [True] * len(steps_struct)
 
