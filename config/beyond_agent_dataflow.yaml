@@ -117,7 +117,7 @@ semantic_advantage:
   llm_evaluation_log_dir: null  # 设置为具体路径来启用，例如："/path/to/llm_evaluation_logs"
   prm_grpo:
     enable_prm_grpo: false
-    prm_scheme: allocation_c           # fix | allocation | allocation_c | decouple
+    prm_scheme: decouple           # fix | allocation | allocation_c | decouple
     do_batch_norm: true
     equal_trajectory_weight: true
     fix_base: 0.2

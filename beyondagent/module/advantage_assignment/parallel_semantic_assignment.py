@@ -430,10 +430,9 @@ async def evaluate_step_flags_parallel(tokenizer, batch, overall_score_source: s
         sample_mask = response_mask[sample_idx]
         if overall_score_source == "token_level_rewards":
             # PRM-GRPO 模式：使用原始 ORM 奖励
-            # shuchang
+            # shuchang 0904：reward 0,1 映射为-1,1
             orm_sum = batch.batch["token_level_rewards"][sample_idx].sum().item()
-            orm_scores = torch.where(orm_sum > 0, torch.ones_like(orm_sum), -torch.ones_like(orm_sum)).to(dtype=torch.float32)
-
+            orm_scores = 1.0 if orm_sum > 0 else -1.0
             overall_score = orm_scores
         elif overall_score_source == "advantages":
             # SSA 模式：使用计算后的 advantage
