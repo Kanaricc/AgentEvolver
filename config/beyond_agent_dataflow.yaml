@@ -41,6 +41,8 @@ actor_rollout_ref:
     max_env_len: 4096
     enable_request_id: False
     sparse: True
+    magnify_success: False
+    train_history_infer_token: True
 
     magnify_success: False
     train_history_infer_token: True

@@ -14,6 +14,27 @@ This example demonstrates how to perform agent training for a given environment,
 3. ParallelEnvManager类：在Trainer中引入ParallelEnvManager类，可通过线程池，并行执行多个dataflow对象（为每个prompt创建一个dataflow对象），并对输出结果进行聚合（upcoming）。
 4. AsyncLLMServerManager类：在ParallelEnvManager中使用verl中的LLMServerManager类，所有dataflow对象共用同一个LLMServerManager，由LLMServerManager同时管理多个vLLM server, 通过ChatScheduler对来自各个线程中dataflow的llm-call进行分发和等待。
 
+
+
+## Installation Guide
+
+```bash
+# use uv to install deps, you can also choose conda
+uv venv --python=3.11
+source .venv/bin/activate
+# clone our verl branch
+git submodule update --init external/verl
+# make sure our pip is ready
+uv pip install --upgrade pip setuptools packaging -i https://mirrors.aliyun.com/pypi/simple/
+# install the majority of dependencies
+uv pip install -r requirements.txt -i https://mirrors.aliyun.com/pypi/simple/ --no-deps --prerelease=allow
+# create link to verl
+uv pip install -e external/verl -i https://mirrors.aliyun.com/pypi/simple/
+# finally, install flash attention (must be installed at last, need to connect to github)
+uv pip install --verbose flash-attn==2.7.4.post1 ring-flash-attn -i https://mirrors.aliyun.com/pypi/simple/ --no-deps --no-build-isolation
+```
+
+
 ## Usage
 
 ### Step 1: Install & Run EnvService
