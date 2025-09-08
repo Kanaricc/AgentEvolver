@@ -25,6 +25,7 @@ from concurrent.futures.thread import ThreadPoolExecutor
 from copy import deepcopy
 from pprint import pprint
 from typing import List, Optional, Any
+import warnings
 
 from loguru import logger
 import numpy as np
@@ -139,7 +140,6 @@ def union_gen_batch_via_task_id(tasks, batch: DataProto, gen_batch_output: DataP
     batch_extend = batch.select_idxs(indices)
     batch_final = batch_extend.union(gen_batch_output)
     return batch_final
-
 
 
 class BeyondAgentRayPPOTrainer(RayPPOTrainer):
@@ -1044,7 +1044,18 @@ class BeyondAgentRayPPOTrainer(RayPPOTrainer):
                             multi_turn=self.config.actor_rollout_ref.rollout.multi_turn.enable,
                             config=self.config.algorithm,
                         )
-                        # breakpoint()
+                        
+                        # Apply decay factor of 0.5 to non_tensor_batch['extras'][i]['evaluator'] != 'env'
+                        if os.environ.get("DEBUG_ARG","").find("synth_decay")!=-1:
+                            if epoch==0 and i==0:
+                                print("DEBUG: change ratio of synthetic data from 1 to 0.5")
+                            assert 'extras' in batch.non_tensor_batch
+                            if 'extras' in batch.non_tensor_batch:
+                                for i in range(len(batch.non_tensor_batch['extras'])):
+                                    assert 'evaluator' in batch.non_tensor_batch['extras'][i]
+                                    evaluator = batch.non_tensor_batch['extras'][i]['evaluator']
+                                    if evaluator != 'env':
+                                        batch.batch["advantages"][i] *= 0.5
 
                     # update critic
                     if self.use_critic:
@@ -1143,6 +1154,11 @@ class BeyondAgentRayPPOTrainer(RayPPOTrainer):
             # we expect the train dataset is fully explored at the beginning, no reload needed.
             # if isinstance(self.train_dataset, FullDataset):
             #     self.train_dataset.reload()
+            if os.environ.get("DEBUG_ARG",'').find("ratio_decay")!=-1:
+                from beyondagent.module.task_manager.data_mixture import UnifiedMixtureStrategy
+                print("DEBUG: change ratio of synthetic data from 1 to 0.5")
+                assert isinstance(self.train_dataset._mixture_strategy,UnifiedMixtureStrategy)
+                self.train_dataset._mixture_strategy._synthetic_ratio-=1/5 # initial 1, 0 at about epoch 5 (about step 30)
             self.train_dataset.update()
 
 

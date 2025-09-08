@@ -1,6 +1,7 @@
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import copy
 import functools
+import hashlib
 import json
 import os
 import pickle
@@ -38,6 +39,7 @@ from beyondagent.module.task_manager.filters.filters import NaiveTaskPostFilter,
 from beyondagent.module.task_manager.base import LlmClient, TaskObjectiveRetrieval
 from beyondagent.module.task_manager.strategies.deduplication import LlmDedupSamplingExploreStrategy
 from beyondagent.module.task_manager.strategies.random import LlmRandomSamplingExploreStrategy
+from beyondagent.module.task_manager.user_profiles import UserProfile
 from beyondagent.schema.task import Task, TaskObjective
 from beyondagent.schema.trajectory import Trajectory
 from verl.utils.dataset.rl_dataset import RLHFDataset
@@ -56,6 +58,7 @@ class TaskManager(object):
         self,
         config: DictConfig,
         exploration_strategy: str,
+        user_profile:UserProfile,
         exploration_strategy_args,
         llm_client: LlmClient,
         old_retrival: TaskObjectiveRetrieval,
@@ -80,7 +83,7 @@ class TaskManager(object):
         self._post_filter: list[TaskPostFilter] = [LlmFilter(env_service_url,llm_client,self._num_exploration_threads,tokenizer=tokenizer,config=config)]
         
         self._tasks: list[Task]=[]
-        self._exploration_strategy._inject_deps(self._old_retrival,self._llm_client,DashScopeClient(model_name='qwq-plus',max_tokens=8192))
+        self._exploration_strategy._inject_deps(self._old_retrival,self._llm_client,DashScopeClient(model_name='qwen3-235b-a22b-instruct-2507',max_tokens=8192),user_profile=user_profile)
     
     @property
     def seed_tasks(self):
@@ -149,14 +152,48 @@ class TaskManager(object):
         return dataset
     
     
-    def generate_task(self, tasks: Sequence[Task],*,show_progress=False) -> list[TaskObjective]:
-        task_q = list(copy.copy(tasks)) * self._n
+    def _compute_tasks_hash(self, tasks: Sequence[Task]) -> str:
+        """Compute hash of tasks to verify consistency during resume."""
+        task_strs = [f"{task.task_id}:{task.env_type}" for task in tasks]
+        combined_str = "|".join(task_strs)
+        return hashlib.md5(combined_str.encode()).hexdigest()
+    
+    def generate_task(self, tasks: Sequence[Task], *, show_progress=False, resume_file: Optional[str] = None) -> list[TaskObjective]:
+        if resume_file is None:
+            resume_file = '.generate_task.checkpoint.json'
+        
+        # Compute hash of current tasks
+        current_tasks_hash = self._compute_tasks_hash(tasks)
+        # Load from checkpoint if resume_file exists
         res = []
+        processed_indices = set()
+        if resume_file and os.path.exists(resume_file):
+            try:
+                with open(resume_file, 'r') as f:
+                    checkpoint = json.load(f)
+                    # Check if tasks hash matches
+                    if checkpoint['tasks_hash'] != current_tasks_hash:
+                        logger.warning(f"Tasks hash mismatch. Expected: {current_tasks_hash}, got: {checkpoint['tasks_hash']}. Removing checkpoint.")
+                        os.remove(resume_file)
+                    else:
+                        res = [TaskObjective.parse_raw(json.dumps(obj)) for obj in checkpoint.get('results', [])]
+                        processed_indices = {int(i) for i in checkpoint.get('processed_indices', [])}
+                        logger.info(f"Resumed from checkpoint: {len(res)} results loaded, {len(processed_indices)} batches processed")
+            except Exception as e:
+                logger.warning(f"Failed to load checkpoint: {e}, starting from scratch")
+        
+        # 每个任务都 roll n 次
+        task_q = list(copy.copy(tasks)) * self._n
         
         # 每次最多探索所有不同任务，或者最大线程个任务，防止同批次中生成相同任务
         parallel_num = min(self._num_exploration_threads, len(tasks))
         with ThreadPoolExecutor(max_workers=self._num_exploration_threads) as pool:
-            for i in tqdm(range(0, len(task_q), parallel_num),desc="generating tasks", disable=not show_progress):
+            batch_indices = list(range(0, len(task_q), parallel_num))
+            for idx, i in enumerate(tqdm(batch_indices, desc="generating tasks", disable=not show_progress)):
+                # Skip already processed batches when resuming
+                if idx in processed_indices:
+                    continue
+                    
                 futures = [
                     pool.submit(self._exlore_and_summarize, task, data_id, rollout_id)
                     for task, data_id, rollout_id in zip(
@@ -170,8 +207,28 @@ class TaskManager(object):
                 # realtime filter
                 res = functools.reduce(lambda x, f: f.filter(x), self._realtime_filters, res)
                 self._old_retrival.reset()
-                for i in res:
-                    self._old_retrival.add_objective(i)
+                for j in res:
+                    self._old_retrival.add_objective(j)
+                    
+                # Mark this batch as processed
+                processed_indices.add(idx)
+                
+                # Save checkpoint
+                if resume_file:
+                    try:
+                        checkpoint_data = {
+                            'results': [obj.dict() for obj in res],
+                            'processed_indices': list(processed_indices),
+                            'total_batches': len(batch_indices),
+                            'tasks_hash': current_tasks_hash,
+                            'timestamp': time.time()
+                        }
+                        with open(resume_file, 'w') as f:
+                            json.dump(checkpoint_data, f, indent=2)
+                    except Exception as e:
+                        logger.warning(f"Failed to save checkpoint: {e}")
+                
+                
                     
         res = functools.reduce(lambda x, f: f.filter(x), self._realtime_filters, res)
         # post filter
