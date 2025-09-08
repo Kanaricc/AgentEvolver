@@ -15,7 +15,6 @@ Your job is to analyze an agent's API interaction history and transform it into 
 # OBJECTIVES
 1. **Understand Capabilities**  
    - Analyze the recorded API calls to identify the actual functional capabilities demonstrated.
-   - Ignore any exploratory or documentation-related calls (e.g., `show_app_descriptions`, `show_api_descriptions`, `show_api_doc`) when deriving real-world scenarios.
 
 2. **Think Like a Real Experienced User**  
    - Imagine practical, everyday problems where a real person would naturally use this exact API call sequence (minus the documentation exploration).
@@ -26,7 +25,7 @@ Your job is to analyze an agent's API interaction history and transform it into 
    For each realistic task, provide:
    - **query**: A natural-language request that a real user might make.
    - **confidence**: A number between `0.0` and `1.0` representing how confident you are that this is a real, common need.
-   - **action_sequence**: The **minimal** sequence of technical steps that directly accomplishes the task, **excluding** any API documentation or capability discovery calls.
+   - **action_sequence**: The sequence of technical steps that directly accomplishes the task.
 
 ---
 
@@ -37,7 +36,6 @@ Your job is to analyze an agent's API interaction history and transform it into 
 
 ## 2. Remove Non-Essential Steps
 - Do **not** include:
-  - API documentation queries (`show_app_descriptions`, `show_api_descriptions`, `show_api_doc`, etc.)
   - Capability exploration or debugging steps.
 
 ## 3. Specificity & Verifiability
@@ -59,7 +57,7 @@ For each identified task, output exactly one block in this format:
 {
   "query": "[A natural, specific, verifiable user request]",
   "confidence": [0.0 - 1.0],
-  "action_sequence": "[Minimal technical sequence that directly solves the task, excluding all documentation/exploration steps]"
+  "action_sequence": "[Technical sequence that directly solves the task]"
 }
 </task>
 
@@ -88,7 +86,6 @@ For each identified task, output exactly one block in this format:
 ✅ **Clear goal** – What exactly is the user trying to achieve?  
 ✅ **Concrete details** – Who, what, when, where, how much/many?  
 ✅ **Verifiable** – Can success/failure be objectively determined?  
-✅ **Minimal steps** – No API documentation or exploration calls included.  
 ✅ **Human-first phrasing** – Sounds like something a real person would say.
 """
 
@@ -136,7 +133,8 @@ def get_task_summarize_prompt(
 <|END|>
 """
             pass
-        x += f"### Reward: {traj.reward.outcome}\n{traj.reward.description}\n"
+        if traj.reward is not None:
+            x += f"### Reward: {traj.reward.outcome}\n{traj.reward.description}\n"
         idx += 1
 
     objectives: list[str] = [x.objective for x in old_objectives if x.objective is not None]
