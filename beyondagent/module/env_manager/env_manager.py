@@ -410,8 +410,6 @@ class ParallelEnvManager(object):
 
             # ------------- shuchang 0714: append step_ids and steps_texts ------------
             resp_ids = sample.response_ids
-            assistant_tpl = self.response_template_ids
-            human_tpl     = self.instruction_template_ids
             # shuchang: 0809
             # FIXME: 解决stepid对不齐的问题，使用统一的step解析函数parse_response_ids_to_steps 
             resp_ids = sample.response_ids
