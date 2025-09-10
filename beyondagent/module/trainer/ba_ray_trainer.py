@@ -64,16 +64,10 @@ from beyondagent.schema.task import Task
 from beyondagent.schema.trajectory import Trajectory
 
 from beyondagent.utils.plot_entropy import log_token_entropy
-from beyondagent.module.advantage_assignment.token_level_assignment import _add_entropy_mask as _add_advantage_mask
 from beyondagent.utils.tracking import ValidationGenerationsLogger
 
 
-from beyondagent.utils.advantage_structure_checker import (
-    debug_advantage_structure, 
-    validate_grpo_advantage_structure
-)
 from beyondagent.utils.step_parser import verify_step_alignment, verify_step_content
-# from beyondagent.module.credit_assign import AssignmentConfig, CreditAssigner
 
 def parse_reward_from_dataproto(data: DataProto, return_dict=False) -> dict | torch.Tensor:
     """
@@ -1066,6 +1060,7 @@ class BeyondAgentRayPPOTrainer(RayPPOTrainer):
                         # ==================== Begin PRM GRPO  ====================
                         sem_cfg = self._get_semantic_config()
                         enable_prm_grpo = getattr(getattr(sem_cfg, 'prm_grpo', None), 'enable_prm_grpo', getattr(sem_cfg, 'enable_prm_grpo', False))
+                        enable_adca_metric = getattr(getattr(sem_cfg, 'prm_grpo', None), 'enable_adca_metric', getattr(sem_cfg, 'enable_adca_metric', False))
                         prm_cfg = getattr(sem_cfg, "prm_grpo", None)
                         prm_epoch = getattr(prm_cfg, "prm_epoch", 100) 
                         
@@ -1085,7 +1080,7 @@ class BeyondAgentRayPPOTrainer(RayPPOTrainer):
                             config=self.config.algorithm,
                         )
                         # ============= shuchang: Begin PRM GRPO =============
-                        if enable_prm_grpo and epoch < prm_epoch:
+                        if enable_adca_metric and epoch < prm_epoch:
                             # === (A) 解析/校验 step 边界 ===
                             if not verify_step_alignment(batch, self.tokenizer, self.global_steps):
                                 raise RuntimeError("Step alignment check failed!")
@@ -1159,7 +1154,8 @@ class BeyondAgentRayPPOTrainer(RayPPOTrainer):
                                 "prm/bad_steps_total": float(pos_bad + neg_bad),
                             })
                             # --- 指标统计：PRM评估结果统计信息 ---
-
+                            
+                        if enable_prm_grpo and epoch < prm_epoch:
                             # === (C) PRM → GRPO 后缀和 ===
                             from beyondagent.module.advantage_assignment.prm_grpo import (
                                 compute_prm_grpo_advantages, PRMHyper
