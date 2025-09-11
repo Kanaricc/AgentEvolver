@@ -141,3 +141,4 @@ temp.sh
 scripts/*
 examples/*
 synthetic_data/*
+examples/example_launcher
