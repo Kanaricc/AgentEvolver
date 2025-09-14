@@ -138,3 +138,7 @@ anni_scripts
 anni_scripts/run_baseline_0825.sh
 temp.sh
 examples/example_launcher
+
+scripts/*
+examples/*
+synthetic_data/*

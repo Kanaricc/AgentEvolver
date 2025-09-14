@@ -44,8 +44,6 @@ actor_rollout_ref:
     magnify_success: False
     train_history_infer_token: True
 
-    magnify_success: False
-    train_history_infer_token: True
   model:
     path: /mnt/data/zouanni.zan/models/Qwen2.5-14B-Instruct
     
@@ -114,12 +112,35 @@ experience_maker:
 
 hybrid_experience_training:
   enable: False
-  val_rollout_expmode: "mixed"    # dev集上rollout是否加经验: ["mixed", "all", "woexp"]
-  train_rollout_expmode: "mixed"  # train集上rollout是否加经验: ["mixed", "all", "woexp"]
-  rollout_expratio: 0.5           # rollout时在group内部加经验的比例, train&val 保持一致
+  val_rollout_expmode: "woexp"    # dev集上rollout是否加经验: ["mixed", "all", "woexp"]
+  train_rollout_expmode: "woexp"  # train集上rollout是否加经验: ["mixed", "all", "woexp"]
+  rollout_expratio: 0.0           # rollout时在group内部加经验的比例, train&val 保持一致
   train_sample_expmode: "keep"    # train集上rollout之后转换成训练样本保留/剔除/混合经验: ["keep", "discard", "hybrid"]
-  train_sample_keepratio: 0.5     # task-level多少比例选择保留经验
+  train_sample_keepratio: 1.0     # task-level多少比例选择保留经验
   experience_template: "\n\nSome Related Experience to help you to complete the task:<EXP>{}</EXP>"  # 插入经验的模版
 
 trainer:
   val_only: False
+
+# 语义评估和adca_grpo的配置
+attribution_driven_credit_assignment:
+  enable: false                     # 总开关
+  evaluation_type: "api"            # 评估类型 ("local" 或 "api")
+  consistent_scale: 1.0             # 一致步骤缩放因子
+  pos_unconsistent_scale: 0.2       # 不一致步骤缩放因子
+  neg_unconsistent_scale: -0.2      # 不一致步骤负面缩放因子
+  concurrent: 5                    # 并发处理数量
+  model: "qwen-plus"                 # 语义评估使用的模型
+  api_max_retries: 200              # API调用最大重试次数，默认200次
+  llm_evaluation_log_dir: null      # 设置为具体路径来启用，例如："/path/to/llm_evaluation_logs"
+  adca_grpo:
+    prm_scheme: "decouple"          # allocation | decouple
+    do_batch_norm: true
+    equal_trajectory_weight: true
+    fix_base: 0.2
+    alpha: 0.1
+    orm_distribution: last_step
+    enable_length_normalization: false   # 控制是否进行长度正则化
+    prm_epoch: 100
+    skip_type: "none"               # "none" | "skip_small_adv" | "skip_all_neg"
+    enable_adca_metric: false
