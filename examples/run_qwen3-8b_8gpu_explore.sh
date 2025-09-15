@@ -73,9 +73,9 @@ python3 -m beyondagent.main_ppo \
     experience_maker.enable_summarizer=False \
     experience_maker.enable_context_generator=False \
     experience_maker.workspace_id="w1_qwen25_v2_${current_time}" \
-    task_manager.n=8 \
-    env_service.env_type=appworld \
-    task_manager.train_data_path=tasks_explored.train.appworld0910_1.json \
+    task_manager.n=10 \
+    env_service.env_type=bfcl \
+    task_manager.train_data_path=tasks_explored.train.bfcl0915.json \
     task_manager.mixture.synthetic_data_ratio=1.0 \
     task_manager.mixture.use_original_tasks=True \
     2>&1 | tee "$log_file" \

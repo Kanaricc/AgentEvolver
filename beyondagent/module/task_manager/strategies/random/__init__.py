@@ -84,7 +84,7 @@ class LlmRandomSamplingExploreStrategy(TaskExploreStrategy):
                 'token':[0],
             },
             stop=[False], # 这俩玩意有没有什么办法能封装一下
-            system_prompt=get_agent_interaction_system_prompt(appworld.user_profile), # FIXME debug profile
+            system_prompt=get_agent_interaction_system_prompt(bfcl.user_profile), # FIXME debug profile
         )
 
         return [traj]
@@ -104,10 +104,8 @@ class LlmRandomSamplingExploreStrategy(TaskExploreStrategy):
         trajectory.steps[2]['content'] = "[MASKED]"
         
         system_prompt, user_prompt = get_task_summarize_prompt(
-            [trajectory], old_objectives, appworld.user_profile # FIXME debug profile
+            [trajectory], old_objectives, bfcl.user_profile # FIXME debug profile
         )
-        # FIXME debug
-        assert user_prompt.find("You must follow these pattern to generate query") !=-1, f"user prompt must contain 'You must follow these pattern to generate query': {user_prompt}"
         messages = [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt},
