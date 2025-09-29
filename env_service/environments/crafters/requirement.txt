@@ -1,9 +1,0 @@
-ray
-fastapi
-uvicorn
-uuid
-crafter
-gym
-gymnasium
-scipy
-pydantic==1.8.2
