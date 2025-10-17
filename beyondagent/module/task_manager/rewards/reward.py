@@ -89,9 +89,7 @@ def steps_to_msg(steps: list[dict[str, Any]]) -> str:
 @grader_manager.reg("llm")
 class LlmAsJudgeRewardCalculator(RewardCalculator):
     """
-    RewardCalculator that uses LLM as judge.
-    
-    TODO: This is a temperary solution for synthetic data.
+    A naive RewardCalculator that uses LLM as judge.
     """
     def __init__(self,task:Task, model_name='qwen3-235b-a22b-instruct-2507'):
         """

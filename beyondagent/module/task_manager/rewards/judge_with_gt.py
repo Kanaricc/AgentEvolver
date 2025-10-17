@@ -65,9 +65,7 @@ First provide your detailed reasoning analysis, then output an integer score bet
 @grader_manager.reg("llm-gt")
 class LlmAsJudgeRewardCalculatorWithGT(RewardCalculator):
     """
-    RewardCalculator that uses LLM as judge.
-    
-    TODO: This is a temperary solution for synthetic data.
+    A naive RewardCalculator that uses LLM as judge.
     """
     def __init__(self, task:Task, model_name='qwq-plus'):
         super().__init__(task)

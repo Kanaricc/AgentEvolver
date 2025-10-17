@@ -177,7 +177,7 @@ class LlmAsJudgeBinaryRewardCalculatorWithGT(RewardCalculator):
         assert len(trajectory.steps) >= 2 and trajectory.steps[1]['role'] == 'user', "trajectory must start with system message and then user message"
         task_query = trajectory.steps[1]['content']
 
-        # TODO the ground-truth must be provided, for now.
+        # the ground-truth must be provided, for now.
         assert self.task.ground_truth is not None, "ground truth must not be None for synthetic task"
         if self._use_mean_constraint:
             content=USER_PROMPT_WITH_MEAN_CONSTRAINT.format(
