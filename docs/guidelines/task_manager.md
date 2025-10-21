@@ -156,7 +156,7 @@ Task Manager can be executed in standalone mode for simple task synthesis.
 Example command:
 
 ```bash
-# TODO
+$ python -m beyondagent.module.task_manager
 ```
 
 The synthesis progress will be displayed. When the process completes, the path to the generated tasks will be printed.
