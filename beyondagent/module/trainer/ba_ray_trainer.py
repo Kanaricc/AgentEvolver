@@ -1053,6 +1053,7 @@ class BeyondAgentRayPPOTrainer(RayPPOTrainer):
 
                             tasks = [Task(
                                         task_id=gen_batch.non_tensor_batch["extras"][i]["task_id"],
+                                        query=gen_batch.non_tensor_batch["extras"][i]['new_query'],
                                         env_type=self.config.env_service.env_type,
                                         open_query=gen_batch.non_tensor_batch["extras"][i]['open_query'],
                                         evaluator=gen_batch.non_tensor_batch['extras'][i]['evaluator'],
