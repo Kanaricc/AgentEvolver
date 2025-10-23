@@ -15,12 +15,19 @@ This example demonstrates how to perform agent training for a given environment,
 4. AsyncLLMServerManager类：在ParallelEnvManager中使用verl中的LLMServerManager类，所有dataflow对象共用同一个LLMServerManager，由LLMServerManager同时管理多个vLLM server, 通过ChatScheduler对来自各个线程中dataflow的llm-call进行分发和等待。
 
 
+## Quick Start
+### Installation
 
-## Installation Guide
+We recommend using `uv` to set up the training environment, which is significantly faster than conda.
+
+<details>
+<summary>Set up environment with uv (click to read detail)</summary>
+
 
 ```bash
-# use uv to install deps, you can also choose conda
-uv venv --python=3.11
+# setup uv (you can also choose conda if you prefer, but conda is too slow)
+curl -LsSf https://astral.sh/uv/install.sh | sh
+uv venv --python=3.11 # If this step is slow, add ENV variable: UV_PYTHON_INSTALL_MIRROR="https://gh-proxy.com/https://github.com/astral-sh/python-build-standalone/releases/download"
 source .venv/bin/activate
 # clone our verl branch
 git submodule update --init external/verl
@@ -33,6 +40,9 @@ uv pip install -e external/verl -i https://mirrors.aliyun.com/pypi/simple/
 # finally, install flash attention (must be installed at last, need to connect to github)
 uv pip install --verbose flash-attn==2.7.4.post1 ring-flash-attn -i https://mirrors.aliyun.com/pypi/simple/ --no-deps --no-build-isolation
 ```
+
+</details>
+
 
 
 ## Usage
