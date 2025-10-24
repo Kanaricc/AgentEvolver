@@ -1,5 +1,5 @@
 <p align="center">
- <img src="docs/img/logo.jpg" alt="AgentEvolver Logo" width="70%">
+ <img src="docs/img/logo.png" alt="AgentEvolver Logo" width="70%">
 </p>
 <h2 align="center">AgentEvolver: Towards Efficient Self-Evolving Agent System</h2>
 
