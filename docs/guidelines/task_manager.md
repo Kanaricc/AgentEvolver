@@ -189,7 +189,7 @@ In data-driven model optimization, agent training is formulated as trajectory tu
 
 Task Manager addresses this challenge by providing a dynamic and general-purpose workflow for environment exploration, task generation, and quality control.
 
-![The Whole Workflow of Task Manager](/img/task_manager/workflow.png)
+![The Whole Workflow of Task Manager](../img/task_manager/workflow.png)
 
 From the figure, the workflow consists of three major steps and corresponding components:
 
